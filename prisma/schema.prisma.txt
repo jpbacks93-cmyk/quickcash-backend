@@ -1,0 +1,122 @@
+// Prisma Schema — QuickCash Backend
+// Docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// USERS
+// ─────────────────────────────────────────────
+model User {
+  id          String   @id @default(cuid())
+  phone       String   @unique
+  name        String?
+  email       String?
+  pinHash     String?
+  kycStatus   String   @default("PENDING")
+  creditScore Int      @default(500)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  loans       Loan[]
+  guarantors  Guarantor[]
+  kyc         Kyc?
+
+  @@index([phone])
+}
+
+// ─────────────────────────────────────────────
+// OTP
+// ─────────────────────────────────────────────
+model Otp {
+  id        String   @id @default(cuid())
+  phone     String
+  code      String
+  attempts  Int      @default(0)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([phone])
+}
+
+// ─────────────────────────────────────────────
+// GUARANTORS
+// ─────────────────────────────────────────────
+model Guarantor {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String
+  phone        String
+  email        String?
+  relationship String
+  idNumber     String?
+  status       String    @default("PENDING")
+  otpCode      String?
+  verifiedAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([userId])
+}
+
+// ─────────────────────────────────────────────
+// KYC
+// ─────────────────────────────────────────────
+model Kyc {
+  id            String    @id @default(cuid())
+  userId        String    @unique
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  documentType  String
+  frontImageUrl String?
+  backImageUrl  String?
+  selfieUrl     String?
+  status        String    @default("PENDING")
+  verifiedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+// ─────────────────────────────────────────────
+// LOANS
+// ─────────────────────────────────────────────
+model Loan {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount       Float
+  interestRate Float
+  totalDue     Float
+  dailyPayment Float
+  durationDays Int
+  purpose      String?
+  status       String    @default("PENDING")
+  appliedAt    DateTime  @default(now())
+  approvedAt   DateTime?
+  dueDate      DateTime?
+
+  repayments   Repayment[]
+
+  @@index([userId])
+}
+
+// ─────────────────────────────────────────────
+// REPAYMENTS
+// ─────────────────────────────────────────────
+model Repayment {
+  id        String   @id @default(cuid())
+  loanId    String
+  loan      Loan     @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  amount    Float
+  method    String
+  reference String?
+  status    String   @default("SUCCESSFUL")
+  createdAt DateTime @default(now())
+
+  @@index([loanId])
+}
