@@ -86,21 +86,23 @@ model Kyc {
 // LOANS
 // ─────────────────────────────────────────────
 model Loan {
-  id           String    @id @default(cuid())
-  userId       String
-  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  amount       Float
-  interestRate Float
-  totalDue     Float
-  dailyPayment Float
-  durationDays Int
-  purpose      String?
-  status       String    @default("PENDING")
-  appliedAt    DateTime  @default(now())
-  approvedAt   DateTime?
-  dueDate      DateTime?
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount          Float
+  interestRate    Float
+  totalDue        Float
+  dailyPayment    Float
+  durationDays    Int
+  purpose         String?
+  status          String    @default("PENDING")
+  appliedAt       DateTime  @default(now())
+  approvedAt      DateTime?
+  dueDate         DateTime?
+  rejectionReason String?
+  rejectedAt      DateTime?
 
-  repayments   Repayment[]
+  repayments      Repayment[]
 
   @@index([userId])
 }
