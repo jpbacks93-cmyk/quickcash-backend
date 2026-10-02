@@ -10,11 +10,24 @@ const prisma_1 = require("../lib/prisma");
 const jwt_1 = require("../lib/jwt");
 const auth_1 = require("../middleware/auth");
 const router = (0, express_1.Router)();
+// ─────────────────────────────────────────────
+// OTP generation & dev-mode helpers
+// ─────────────────────────────────────────────
 function generateOtp() {
     return Math.floor(100000 + Math.random() * 900000).toString();
 }
 function generateFakeCode() {
     return '123456';
+}
+/**
+ * Decide whether to allow dev OTPs.
+ * - If ALLOW_DEV_OTP=true → yes (explicit opt-in)
+ * - If NODE_ENV is NOT production → yes (local dev)
+ * - Otherwise → no (real production)
+ */
+function shouldAllowDevOtp() {
+    return (process.env.ALLOW_DEV_OTP === 'true' ||
+        process.env.NODE_ENV !== 'production');
 }
 // ─────────────────────────────────────────────
 // POST /api/auth/send-otp
@@ -25,8 +38,11 @@ const sendOtpSchema = zod_1.z.object({
 router.post('/send-otp', async (req, res) => {
     try {
         const { phone } = sendOtpSchema.parse(req.body);
-        const code = process.env.NODE_ENV === 'production' ? generateOtp() : generateFakeCode();
+        const allowDev = shouldAllowDevOtp();
+        const code = allowDev ? generateFakeCode() : generateOtp();
+        // Delete any existing OTPs for this phone
         await prisma_1.prisma.otp.deleteMany({ where: { phone } });
+        // Create new OTP valid for 5 minutes
         await prisma_1.prisma.otp.create({
             data: {
                 phone,
@@ -34,11 +50,14 @@ router.post('/send-otp', async (req, res) => {
                 expiresAt: new Date(Date.now() + 5 * 60 * 1000),
             },
         });
-        console.log(`[OTP] Phone: ${phone} | Code: ${code}`);
+        // TODO: Send real SMS here (Africa's Talking, Twilio, etc.)
+        // For now, just log it so we can see it in Railway/terminal logs.
+        console.log(`[OTP] Phone: ${phone} | Code: ${code} | DevMode: ${allowDev}`);
         return res.json({
             success: true,
             message: 'OTP sent',
-            devCode: process.env.NODE_ENV === 'production' ? undefined : code,
+            // Only expose the code when dev mode is active
+            devCode: allowDev ? code : undefined,
         });
     }
     catch (err) {
@@ -64,10 +83,14 @@ router.post('/verify-otp', async (req, res) => {
             orderBy: { createdAt: 'desc' },
         });
         if (!otp) {
-            return res.status(400).json({ error: 'No OTP found. Request a new one.' });
+            return res
+                .status(400)
+                .json({ error: 'No OTP found. Request a new one.' });
         }
         if (otp.expiresAt < new Date()) {
-            return res.status(400).json({ error: 'OTP expired. Request a new one.' });
+            return res
+                .status(400)
+                .json({ error: 'OTP expired. Request a new one.' });
         }
         if (otp.code !== code) {
             await prisma_1.prisma.otp.update({
@@ -76,7 +99,9 @@ router.post('/verify-otp', async (req, res) => {
             });
             return res.status(400).json({ error: 'Invalid code' });
         }
+        // Code is correct — delete it
         await prisma_1.prisma.otp.delete({ where: { id: otp.id } });
+        // Find or create user
         let user = await prisma_1.prisma.user.findUnique({ where: { phone } });
         const isNewUser = !user;
         if (!user) {
@@ -84,6 +109,7 @@ router.post('/verify-otp', async (req, res) => {
                 data: { phone },
             });
         }
+        // Issue JWT
         const token = (0, jwt_1.signToken)({ userId: user.id, phone: user.phone });
         return res.json({
             success: true,
@@ -108,7 +134,7 @@ router.post('/verify-otp', async (req, res) => {
     }
 });
 // ─────────────────────────────────────────────
-// POST /api/auth/set-pin
+// POST /api/auth/set-pin  (protected)
 // ─────────────────────────────────────────────
 const setPinSchema = zod_1.z.object({
     pin: zod_1.z.string().length(4).regex(/^\d+$/, 'PIN must be digits'),
@@ -132,7 +158,7 @@ router.post('/set-pin', auth_1.requireAuth, async (req, res) => {
     }
 });
 // ─────────────────────────────────────────────
-// POST /api/auth/login-pin
+// POST /api/auth/login-pin  (protected)
 // ─────────────────────────────────────────────
 router.post('/login-pin', auth_1.requireAuth, async (req, res) => {
     try {

@@ -1,8 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
-import { verifyToken, TokenPayload } from '../lib/jwt';
+import { verifyToken, UserTokenPayload, isUserToken } from '../lib/jwt';
 
 export interface AuthRequest extends Request {
-  user?: TokenPayload;
+  user?: UserTokenPayload;
 }
 
 export function requireAuth(
@@ -18,6 +18,12 @@ export function requireAuth(
   const token = header.slice(7);
   try {
     const payload = verifyToken(token);
+
+    // Admin tokens can't access user routes
+    if (!isUserToken(payload)) {
+      return res.status(403).json({ error: 'User token required' });
+    }
+
     req.user = payload;
     next();
   } catch {
