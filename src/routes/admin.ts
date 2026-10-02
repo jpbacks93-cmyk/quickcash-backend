@@ -24,7 +24,6 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid password' });
     }
 
-    // Issue admin-scoped token
     const token = signToken({ role: 'ADMIN' });
 
     return res.json({
@@ -216,7 +215,7 @@ router.post('/loans/:id/approve', requireAdmin, async (req: AdminRequest, res) =
 
 // ─────────────────────────────────────────────
 // POST /api/admin/loans/:id/reject
-// Reject a PENDING loan
+// Reject a PENDING loan with reason
 // ─────────────────────────────────────────────
 const rejectSchema = z.object({
   reason: z.string().max(200).optional(),
@@ -243,10 +242,16 @@ router.post('/loans/:id/reject', requireAdmin, async (req, res) => {
 
     const updated = await prisma.loan.update({
       where: { id: loanId },
-      data: { status: 'REJECTED' },
+      data: {
+        status: 'REJECTED',
+        rejectionReason: reason || 'Application did not meet our criteria',
+        rejectedAt: new Date(),
+      },
     });
 
-    console.log(`[ADMIN] Rejected loan ${loanId} — ${reason || 'no reason'}`);
+    console.log(
+      `[ADMIN] Rejected loan ${loanId} — Reason: ${reason || '(no reason)'}`
+    );
 
     return res.json({ success: true, loan: updated });
   } catch (err: any) {
