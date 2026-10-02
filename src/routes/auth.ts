@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { signToken } from '../lib/jwt';
 import { requireAuth, AuthRequest } from '../middleware/auth';
+import { sendOtpSms } from '../lib/sms';
 
 const router = Router();
 
@@ -22,7 +23,7 @@ function generateFakeCode(): string {
  * Decide whether to allow dev OTPs.
  * - If ALLOW_DEV_OTP=true → yes (explicit opt-in)
  * - If NODE_ENV is NOT production → yes (local dev)
- * - Otherwise → no (real production)
+ * - Otherwise → no (real production, will send SMS)
  */
 function shouldAllowDevOtp(): boolean {
   return (
@@ -57,14 +58,23 @@ router.post('/send-otp', async (req, res) => {
       },
     });
 
-    // TODO: Send real SMS here (Africa's Talking, Twilio, etc.)
-    // For now, just log it so we can see it in Railway/terminal logs.
-    console.log(`[OTP] Phone: ${phone} | Code: ${code} | DevMode: ${allowDev}`);
+    // ─── Send SMS ───────────────────────────────
+    let smsSent = false;
+    if (!allowDev) {
+      const result = await sendOtpSms(phone, code);
+      smsSent = result.success;
+    } else {
+      console.log(`[OTP] DEV MODE → ${phone} | Code: ${code}`);
+    }
 
     return res.json({
       success: true,
-      message: 'OTP sent',
-      // Only expose the code when dev mode is active
+      message: allowDev
+        ? 'OTP sent (dev mode — no SMS)'
+        : smsSent
+          ? 'OTP sent via SMS'
+          : 'OTP created but SMS delivery failed',
+      // Only expose code in dev mode
       devCode: allowDev ? code : undefined,
     });
   } catch (err: any) {
@@ -113,7 +123,7 @@ router.post('/verify-otp', async (req, res) => {
       return res.status(400).json({ error: 'Invalid code' });
     }
 
-    // Code is correct — delete it
+    // Correct code — delete it
     await prisma.otp.delete({ where: { id: otp.id } });
 
     // Find or create user

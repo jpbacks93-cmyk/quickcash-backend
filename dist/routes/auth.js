@@ -9,6 +9,7 @@ const zod_1 = require("zod");
 const prisma_1 = require("../lib/prisma");
 const jwt_1 = require("../lib/jwt");
 const auth_1 = require("../middleware/auth");
+const sms_1 = require("../lib/sms");
 const router = (0, express_1.Router)();
 // ─────────────────────────────────────────────
 // OTP generation & dev-mode helpers
@@ -23,7 +24,7 @@ function generateFakeCode() {
  * Decide whether to allow dev OTPs.
  * - If ALLOW_DEV_OTP=true → yes (explicit opt-in)
  * - If NODE_ENV is NOT production → yes (local dev)
- * - Otherwise → no (real production)
+ * - Otherwise → no (real production, will send SMS)
  */
 function shouldAllowDevOtp() {
     return (process.env.ALLOW_DEV_OTP === 'true' ||
@@ -50,13 +51,23 @@ router.post('/send-otp', async (req, res) => {
                 expiresAt: new Date(Date.now() + 5 * 60 * 1000),
             },
         });
-        // TODO: Send real SMS here (Africa's Talking, Twilio, etc.)
-        // For now, just log it so we can see it in Railway/terminal logs.
-        console.log(`[OTP] Phone: ${phone} | Code: ${code} | DevMode: ${allowDev}`);
+        // ─── Send SMS ───────────────────────────────
+        let smsSent = false;
+        if (!allowDev) {
+            const result = await (0, sms_1.sendOtpSms)(phone, code);
+            smsSent = result.success;
+        }
+        else {
+            console.log(`[OTP] DEV MODE → ${phone} | Code: ${code}`);
+        }
         return res.json({
             success: true,
-            message: 'OTP sent',
-            // Only expose the code when dev mode is active
+            message: allowDev
+                ? 'OTP sent (dev mode — no SMS)'
+                : smsSent
+                    ? 'OTP sent via SMS'
+                    : 'OTP created but SMS delivery failed',
+            // Only expose code in dev mode
             devCode: allowDev ? code : undefined,
         });
     }
@@ -99,7 +110,7 @@ router.post('/verify-otp', async (req, res) => {
             });
             return res.status(400).json({ error: 'Invalid code' });
         }
-        // Code is correct — delete it
+        // Correct code — delete it
         await prisma_1.prisma.otp.delete({ where: { id: otp.id } });
         // Find or create user
         let user = await prisma_1.prisma.user.findUnique({ where: { phone } });
