@@ -35,9 +35,10 @@ export async function sendSms(
   }
 
   try {
-    const result = await smsClient.send({
+     const result = await smsClient.send({
       to: [phone],
       message,
+      from: process.env.AT_SENDER_ID || undefined,
     });
 
     // AT returns: { SMSMessageData: { Recipients: [ { status, messageId } ] } }
