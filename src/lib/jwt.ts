@@ -4,8 +4,9 @@ const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
 const EXPIRES_IN = '30d';
 
 export interface TokenPayload {
-  userId: string;
-  phone: string;
+  userId?: string;
+  phone?: string;
+  role?: string;
 }
 
 export function signToken(payload: TokenPayload): string {
