@@ -5,10 +5,10 @@ const zod_1 = require("zod");
 const prisma_1 = require("../lib/prisma");
 const jwt_1 = require("../lib/jwt");
 const adminAuth_1 = require("../middleware/adminAuth");
+const notifications_1 = require("../lib/notifications");
 const router = (0, express_1.Router)();
 // ─────────────────────────────────────────────
 // POST /api/admin/login
-// Login with admin password → returns admin JWT
 // ─────────────────────────────────────────────
 const loginSchema = zod_1.z.object({
     password: zod_1.z.string().min(4),
@@ -36,7 +36,6 @@ router.post('/login', async (req, res) => {
 });
 // ─────────────────────────────────────────────
 // GET /api/admin/stats
-// Dashboard numbers
 // ─────────────────────────────────────────────
 router.get('/stats', adminAuth_1.requireAdmin, async (_req, res) => {
     try {
@@ -77,7 +76,6 @@ router.get('/stats', adminAuth_1.requireAdmin, async (_req, res) => {
 });
 // ─────────────────────────────────────────────
 // GET /api/admin/users
-// List all users, newest first
 // ─────────────────────────────────────────────
 router.get('/users', adminAuth_1.requireAdmin, async (req, res) => {
     try {
@@ -107,7 +105,6 @@ router.get('/users', adminAuth_1.requireAdmin, async (req, res) => {
 });
 // ─────────────────────────────────────────────
 // GET /api/admin/loans
-// List loans, filter by status via ?status=PENDING
 // ─────────────────────────────────────────────
 router.get('/loans', adminAuth_1.requireAdmin, async (req, res) => {
     try {
@@ -149,7 +146,6 @@ router.get('/loans', adminAuth_1.requireAdmin, async (req, res) => {
 });
 // ─────────────────────────────────────────────
 // POST /api/admin/loans/:id/approve
-// Approve a PENDING loan → becomes ACTIVE
 // ─────────────────────────────────────────────
 router.post('/loans/:id/approve', adminAuth_1.requireAdmin, async (req, res) => {
     try {
@@ -175,6 +171,14 @@ router.post('/loans/:id/approve', adminAuth_1.requireAdmin, async (req, res) => 
             },
         });
         console.log(`[ADMIN] Approved loan ${loanId}`);
+        // Notify user
+        await (0, notifications_1.createNotification)({
+            userId: loan.userId,
+            type: 'LOAN_APPROVED',
+            title: 'Loan Approved! 🎉',
+            message: `Your loan of $${loan.amount.toFixed(2)} has been approved. Total due: $${loan.totalDue.toFixed(2)}.`,
+            metadata: { loanId: loan.id },
+        });
         return res.json({ success: true, loan: updated });
     }
     catch (err) {
@@ -184,7 +188,6 @@ router.post('/loans/:id/approve', adminAuth_1.requireAdmin, async (req, res) => 
 });
 // ─────────────────────────────────────────────
 // POST /api/admin/loans/:id/reject
-// Reject a PENDING loan with reason
 // ─────────────────────────────────────────────
 const rejectSchema = zod_1.z.object({
     reason: zod_1.z.string().max(200).optional(),
@@ -204,15 +207,24 @@ router.post('/loans/:id/reject', adminAuth_1.requireAdmin, async (req, res) => {
                 error: `Cannot reject a loan with status ${loan.status}`,
             });
         }
+        const rejectionReason = reason || 'Application did not meet our criteria';
         const updated = await prisma_1.prisma.loan.update({
             where: { id: loanId },
             data: {
                 status: 'REJECTED',
-                rejectionReason: reason || 'Application did not meet our criteria',
+                rejectionReason,
                 rejectedAt: new Date(),
             },
         });
-        console.log(`[ADMIN] Rejected loan ${loanId} — Reason: ${reason || '(no reason)'}`);
+        console.log(`[ADMIN] Rejected loan ${loanId} — Reason: ${rejectionReason}`);
+        // Notify user
+        await (0, notifications_1.createNotification)({
+            userId: loan.userId,
+            type: 'LOAN_REJECTED',
+            title: 'Loan Application Rejected',
+            message: rejectionReason,
+            metadata: { loanId: loan.id },
+        });
         return res.json({ success: true, loan: updated });
     }
     catch (err) {

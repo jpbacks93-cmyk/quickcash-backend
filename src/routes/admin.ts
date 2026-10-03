@@ -3,12 +3,12 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { signToken } from '../lib/jwt';
 import { requireAdmin, AdminRequest } from '../middleware/adminAuth';
+import { createNotification } from '../lib/notifications';
 
 const router = Router();
 
 // ─────────────────────────────────────────────
 // POST /api/admin/login
-// Login with admin password → returns admin JWT
 // ─────────────────────────────────────────────
 const loginSchema = z.object({
   password: z.string().min(4),
@@ -41,7 +41,6 @@ router.post('/login', async (req, res) => {
 
 // ─────────────────────────────────────────────
 // GET /api/admin/stats
-// Dashboard numbers
 // ─────────────────────────────────────────────
 router.get('/stats', requireAdmin, async (_req, res) => {
   try {
@@ -92,7 +91,6 @@ router.get('/stats', requireAdmin, async (_req, res) => {
 
 // ─────────────────────────────────────────────
 // GET /api/admin/users
-// List all users, newest first
 // ─────────────────────────────────────────────
 router.get('/users', requireAdmin, async (req, res) => {
   try {
@@ -124,7 +122,6 @@ router.get('/users', requireAdmin, async (req, res) => {
 
 // ─────────────────────────────────────────────
 // GET /api/admin/loans
-// List loans, filter by status via ?status=PENDING
 // ─────────────────────────────────────────────
 router.get('/loans', requireAdmin, async (req, res) => {
   try {
@@ -171,7 +168,6 @@ router.get('/loans', requireAdmin, async (req, res) => {
 
 // ─────────────────────────────────────────────
 // POST /api/admin/loans/:id/approve
-// Approve a PENDING loan → becomes ACTIVE
 // ─────────────────────────────────────────────
 router.post('/loans/:id/approve', requireAdmin, async (req: AdminRequest, res) => {
   try {
@@ -206,6 +202,15 @@ router.post('/loans/:id/approve', requireAdmin, async (req: AdminRequest, res) =
 
     console.log(`[ADMIN] Approved loan ${loanId}`);
 
+    // Notify user
+    await createNotification({
+      userId: loan.userId,
+      type: 'LOAN_APPROVED',
+      title: 'Loan Approved! 🎉',
+      message: `Your loan of $${loan.amount.toFixed(2)} has been approved. Total due: $${loan.totalDue.toFixed(2)}.`,
+      metadata: { loanId: loan.id },
+    });
+
     return res.json({ success: true, loan: updated });
   } catch (err) {
     console.error(err);
@@ -215,7 +220,6 @@ router.post('/loans/:id/approve', requireAdmin, async (req: AdminRequest, res) =
 
 // ─────────────────────────────────────────────
 // POST /api/admin/loans/:id/reject
-// Reject a PENDING loan with reason
 // ─────────────────────────────────────────────
 const rejectSchema = z.object({
   reason: z.string().max(200).optional(),
@@ -240,18 +244,30 @@ router.post('/loans/:id/reject', requireAdmin, async (req, res) => {
       });
     }
 
+    const rejectionReason =
+      reason || 'Application did not meet our criteria';
+
     const updated = await prisma.loan.update({
       where: { id: loanId },
       data: {
         status: 'REJECTED',
-        rejectionReason: reason || 'Application did not meet our criteria',
+        rejectionReason,
         rejectedAt: new Date(),
       },
     });
 
     console.log(
-      `[ADMIN] Rejected loan ${loanId} — Reason: ${reason || '(no reason)'}`
+      `[ADMIN] Rejected loan ${loanId} — Reason: ${rejectionReason}`
     );
+
+    // Notify user
+    await createNotification({
+      userId: loan.userId,
+      type: 'LOAN_REJECTED',
+      title: 'Loan Application Rejected',
+      message: rejectionReason,
+      metadata: { loanId: loan.id },
+    });
 
     return res.json({ success: true, loan: updated });
   } catch (err: any) {

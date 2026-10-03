@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { requireAuth, AuthRequest } from '../middleware/auth';
+import { createNotification } from '../lib/notifications';
 
 const router = Router();
 
@@ -74,7 +75,18 @@ router.post('/apply', requireAuth, async (req: AuthRequest, res) => {
       },
     });
 
-    console.log(`[LOAN] New: $${amount} for ${durationDays} days by ${user.phone}`);
+    console.log(
+      `[LOAN] New: $${amount} for ${durationDays} days by ${user.phone}`
+    );
+
+    // Notify user
+    await createNotification({
+      userId: user.id,
+      type: 'LOAN_APPLIED',
+      title: 'Application Received',
+      message: `Your loan application for $${amount.toFixed(2)} is being reviewed.`,
+      metadata: { loanId: loan.id },
+    });
 
     return res.json({
       success: true,
@@ -208,6 +220,25 @@ router.post('/:id/repay', requireAuth, async (req: AuthRequest, res) => {
         data: { creditScore: { increment: 20 } },
       });
       console.log(`[LOAN] ${loan.id} fully paid! +20 credit`);
+
+      // Notify: Loan fully paid
+      await createNotification({
+        userId: req.user!.userId,
+        type: 'LOAN_PAID',
+        title: 'Loan Fully Paid! 🎉',
+        message:
+          "You've successfully repaid your loan. Your credit score has improved.",
+        metadata: { loanId: loan.id },
+      });
+    } else {
+      // Notify: Partial repayment
+      await createNotification({
+        userId: req.user!.userId,
+        type: 'REPAYMENT_SUCCESS',
+        title: 'Payment Received',
+        message: `Your payment of $${amount.toFixed(2)} was successful. Remaining: $${Math.max(0, loan.totalDue - newTotalRepaid).toFixed(2)}.`,
+        metadata: { loanId: loan.id, amount },
+      });
     }
 
     return res.json({

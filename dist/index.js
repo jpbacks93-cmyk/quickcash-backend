@@ -13,6 +13,7 @@ const loans_1 = __importDefault(require("./routes/loans"));
 const guarantors_1 = __importDefault(require("./routes/guarantors"));
 const kyc_1 = __importDefault(require("./routes/kyc"));
 const admin_1 = __importDefault(require("./routes/admin"));
+const notifications_1 = __importDefault(require("./routes/notifications"));
 dotenv_1.default.config();
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 3000;
@@ -35,6 +36,7 @@ app.use('/api/loans', loans_1.default);
 app.use('/api/guarantors', guarantors_1.default);
 app.use('/api/kyc', kyc_1.default);
 app.use('/api/admin', admin_1.default);
+app.use('/api/notifications', notifications_1.default);
 // 404
 app.use((_req, res) => {
     res.status(404).json({ error: 'Not found' });

@@ -4,6 +4,7 @@ const express_1 = require("express");
 const zod_1 = require("zod");
 const prisma_1 = require("../lib/prisma");
 const auth_1 = require("../middleware/auth");
+const notifications_1 = require("../lib/notifications");
 const router = (0, express_1.Router)();
 const INTEREST_RATES = {
     7: 0.08,
@@ -64,6 +65,14 @@ router.post('/apply', auth_1.requireAuth, async (req, res) => {
             },
         });
         console.log(`[LOAN] New: $${amount} for ${durationDays} days by ${user.phone}`);
+        // Notify user
+        await (0, notifications_1.createNotification)({
+            userId: user.id,
+            type: 'LOAN_APPLIED',
+            title: 'Application Received',
+            message: `Your loan application for $${amount.toFixed(2)} is being reviewed.`,
+            metadata: { loanId: loan.id },
+        });
         return res.json({
             success: true,
             message: 'Loan application submitted',
@@ -185,6 +194,24 @@ router.post('/:id/repay', auth_1.requireAuth, async (req, res) => {
                 data: { creditScore: { increment: 20 } },
             });
             console.log(`[LOAN] ${loan.id} fully paid! +20 credit`);
+            // Notify: Loan fully paid
+            await (0, notifications_1.createNotification)({
+                userId: req.user.userId,
+                type: 'LOAN_PAID',
+                title: 'Loan Fully Paid! 🎉',
+                message: "You've successfully repaid your loan. Your credit score has improved.",
+                metadata: { loanId: loan.id },
+            });
+        }
+        else {
+            // Notify: Partial repayment
+            await (0, notifications_1.createNotification)({
+                userId: req.user.userId,
+                type: 'REPAYMENT_SUCCESS',
+                title: 'Payment Received',
+                message: `Your payment of $${amount.toFixed(2)} was successful. Remaining: $${Math.max(0, loan.totalDue - newTotalRepaid).toFixed(2)}.`,
+                metadata: { loanId: loan.id, amount },
+            });
         }
         return res.json({
             success: true,

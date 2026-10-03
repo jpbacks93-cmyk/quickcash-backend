@@ -8,6 +8,7 @@ import loanRoutes from './routes/loans';
 import guarantorRoutes from './routes/guarantors';
 import kycRoutes from './routes/kyc';
 import adminRoutes from './routes/admin';
+import notificationRoutes from './routes/notifications';
 
 dotenv.config();
 
@@ -37,6 +38,7 @@ app.use('/api/loans', loanRoutes);
 app.use('/api/guarantors', guarantorRoutes);
 app.use('/api/kyc', kycRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // 404
 app.use((_req, res) => {

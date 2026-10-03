@@ -4,6 +4,7 @@ const express_1 = require("express");
 const zod_1 = require("zod");
 const prisma_1 = require("../lib/prisma");
 const auth_1 = require("../middleware/auth");
+const notifications_1 = require("../lib/notifications");
 const router = (0, express_1.Router)();
 // ─────────────────────────────────────────────
 // GET /api/kyc — get my KYC status
@@ -39,7 +40,6 @@ const submitSchema = zod_1.z.object({
 router.post('/submit', auth_1.requireAuth, async (req, res) => {
     try {
         const data = submitSchema.parse(req.body);
-        // Upsert — user may re-submit
         const kyc = await prisma_1.prisma.kyc.upsert({
             where: { userId: req.user.userId },
             create: {
@@ -69,6 +69,13 @@ router.post('/submit', auth_1.requireAuth, async (req, res) => {
                 data: { kycStatus: 'VERIFIED', creditScore: { increment: 50 } },
             });
             console.log(`[KYC] Auto-verified user ${req.user.phone} (dev mode)`);
+            // Notify: KYC verified
+            await (0, notifications_1.createNotification)({
+                userId: req.user.userId,
+                type: 'KYC_VERIFIED',
+                title: 'Identity Verified ✅',
+                message: 'Your identity has been verified. You can now apply for higher loan limits.',
+            });
         }
         return res.json({
             success: true,

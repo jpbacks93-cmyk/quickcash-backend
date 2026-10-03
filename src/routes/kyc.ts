@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { requireAuth, AuthRequest } from '../middleware/auth';
+import { createNotification } from '../lib/notifications';
 
 const router = Router();
 
@@ -43,7 +44,6 @@ router.post('/submit', requireAuth, async (req: AuthRequest, res) => {
   try {
     const data = submitSchema.parse(req.body);
 
-    // Upsert — user may re-submit
     const kyc = await prisma.kyc.upsert({
       where: { userId: req.user!.userId },
       create: {
@@ -74,6 +74,15 @@ router.post('/submit', requireAuth, async (req: AuthRequest, res) => {
         data: { kycStatus: 'VERIFIED', creditScore: { increment: 50 } },
       });
       console.log(`[KYC] Auto-verified user ${req.user!.phone} (dev mode)`);
+
+      // Notify: KYC verified
+      await createNotification({
+        userId: req.user!.userId,
+        type: 'KYC_VERIFIED',
+        title: 'Identity Verified ✅',
+        message:
+          'Your identity has been verified. You can now apply for higher loan limits.',
+      });
     }
 
     return res.json({

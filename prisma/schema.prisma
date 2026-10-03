@@ -14,19 +14,20 @@ datasource db {
 // USERS
 // ─────────────────────────────────────────────
 model User {
-  id          String   @id @default(cuid())
-  phone       String   @unique
-  name        String?
-  email       String?
-  pinHash     String?
-  kycStatus   String   @default("PENDING")
-  creditScore Int      @default(500)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            String         @id @default(cuid())
+  phone         String         @unique
+  name          String?
+  email         String?
+  pinHash       String?
+  kycStatus     String         @default("PENDING")
+  creditScore   Int            @default(500)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
 
-  loans       Loan[]
-  guarantors  Guarantor[]
-  kyc         Kyc?
+  loans         Loan[]
+  guarantors    Guarantor[]
+  kyc           Kyc?
+  notifications Notification[]
 
   @@index([phone])
 }
@@ -121,4 +122,22 @@ model Repayment {
   createdAt DateTime @default(now())
 
   @@index([loanId])
+}
+
+// ─────────────────────────────────────────────
+// NOTIFICATIONS
+// ─────────────────────────────────────────────
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String   // LOAN_APPROVED, LOAN_REJECTED, REPAYMENT, KYC_VERIFIED, LOAN_APPLIED, GUARANTOR_VERIFIED
+  title     String
+  message   String
+  read      Boolean  @default(false)
+  metadata  String?  // Optional JSON string for extra data
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([userId, read])
 }
