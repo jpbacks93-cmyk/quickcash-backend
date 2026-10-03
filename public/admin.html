@@ -25,9 +25,7 @@
   .login-card h1 {
     font-size: 24px; font-weight: 700; margin-bottom: 8px; color: #fff;
   }
-  .login-card p {
-    font-size: 14px; color: #94a3b8; margin-bottom: 24px;
-  }
+  .login-card p { font-size: 14px; color: #94a3b8; margin-bottom: 24px; }
   .login-card input {
     width: 100%; padding: 14px 16px; border-radius: 10px;
     border: 1px solid #334155; background: #0f172a;
@@ -37,7 +35,7 @@
   .login-card button {
     width: 100%; padding: 14px; border-radius: 10px; border: none;
     background: #6366f1; color: #fff; font-size: 15px; font-weight: 600;
-    cursor: pointer; transition: background 0.2s;
+    cursor: pointer;
   }
   .login-card button:hover { background: #4f46e5; }
   .login-card button:disabled { background: #475569; cursor: not-allowed; }
@@ -59,14 +57,20 @@
   header button:hover { background: #334155; }
 
   /* Layout */
-  main { padding: 24px; max-width: 1400px; margin: 0 auto; }
+  main { padding: 24px; max-width: 1500px; margin: 0 auto; }
   .tabs { display: flex; gap: 8px; margin-bottom: 24px; flex-wrap: wrap; }
   .tab {
     padding: 10px 18px; border-radius: 8px; border: 1px solid #334155;
     background: transparent; color: #cbd5e1; cursor: pointer;
-    font-size: 14px; font-weight: 500;
+    font-size: 14px; font-weight: 500; position: relative;
   }
   .tab.active { background: #6366f1; color: #fff; border-color: #6366f1; }
+  .tab .badge {
+    display: inline-block; margin-left: 8px;
+    background: #dc2626; color: #fff;
+    padding: 1px 8px; border-radius: 10px;
+    font-size: 11px; font-weight: 700;
+  }
 
   /* Stats grid */
   .stats-grid {
@@ -81,13 +85,32 @@
     font-size: 12px; color: #94a3b8; text-transform: uppercase;
     letter-spacing: 0.5px; margin-bottom: 8px;
   }
-  .stat-card .value {
-    font-size: 26px; font-weight: 700; color: #fff;
-  }
+  .stat-card .value { font-size: 26px; font-weight: 700; color: #fff; }
   .stat-card.accent-green .value { color: #4ade80; }
   .stat-card.accent-orange .value { color: #fb923c; }
   .stat-card.accent-blue .value { color: #60a5fa; }
   .stat-card.accent-purple .value { color: #a78bfa; }
+  .stat-card.accent-red .value { color: #f87171; }
+
+  /* Search + filters */
+  .toolbar {
+    display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap;
+    align-items: center;
+  }
+  .toolbar input, .toolbar select {
+    padding: 10px 14px; border-radius: 8px;
+    border: 1px solid #334155; background: #1e293b;
+    color: #fff; font-size: 14px;
+    min-width: 200px;
+  }
+  .toolbar input:focus, .toolbar select:focus { outline: none; border-color: #6366f1; }
+  .toolbar button {
+    padding: 10px 16px; border-radius: 8px; border: 1px solid #334155;
+    background: #1e293b; color: #cbd5e1; cursor: pointer; font-size: 14px;
+  }
+  .toolbar button:hover { background: #334155; }
+  .toolbar button.primary { background: #16a34a; color: #fff; border-color: #16a34a; }
+  .toolbar button.primary:hover { background: #15803d; }
 
   /* Table */
   .table-wrap {
@@ -98,14 +121,11 @@
   th {
     text-align: left; padding: 14px 16px; color: #94a3b8;
     font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;
-    font-weight: 600; border-bottom: 1px solid #334155;
-    background: #0f172a;
+    font-weight: 600; border-bottom: 1px solid #334155; background: #0f172a;
   }
-  td {
-    padding: 14px 16px; border-bottom: 1px solid #1e293b;
-    color: #cbd5e1;
-  }
+  td { padding: 14px 16px; border-bottom: 1px solid #1e293b; color: #cbd5e1; }
   tr:hover td { background: #172033; }
+  tr.clickable { cursor: pointer; }
 
   /* Badges */
   .badge {
@@ -119,7 +139,7 @@
   .badge.DEFAULTED { background: rgba(248,113,113,.15); color: #f87171; }
   .badge.VERIFIED { background: rgba(74,222,128,.15); color: #4ade80; }
 
-  /* Action buttons */
+  /* Buttons */
   .btn {
     padding: 6px 12px; border-radius: 6px; border: none;
     font-size: 12px; font-weight: 600; cursor: pointer;
@@ -129,22 +149,84 @@
   .btn-approve:hover { background: #15803d; }
   .btn-reject { background: #dc2626; color: #fff; }
   .btn-reject:hover { background: #b91c1c; }
+  .btn-view { background: #6366f1; color: #fff; }
+  .btn-view:hover { background: #4f46e5; }
 
-  /* Empty state */
+  /* Empty + loading */
   .empty {
-    text-align: center; padding: 40px; color: #64748b;
-    font-size: 14px;
+    text-align: center; padding: 40px; color: #64748b; font-size: 14px;
   }
   .loading {
     text-align: center; padding: 40px; color: #94a3b8;
+  }
+
+  /* Modal */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px; z-index: 100;
+  }
+  .modal {
+    background: #1e293b; border-radius: 16px;
+    border: 1px solid #334155; max-width: 720px; width: 100%;
+    max-height: 85vh; overflow-y: auto;
+  }
+  .modal-header {
+    padding: 20px 24px; border-bottom: 1px solid #334155;
+    display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 0; background: #1e293b; z-index: 1;
+  }
+  .modal-header h2 { font-size: 18px; font-weight: 700; color: #fff; }
+  .modal-header button {
+    background: transparent; border: none; color: #94a3b8;
+    cursor: pointer; font-size: 24px; line-height: 1;
+  }
+  .modal-body { padding: 24px; }
+
+  .detail-row {
+    display: flex; justify-content: space-between;
+    padding: 10px 0; border-bottom: 1px solid #1e293b;
+    font-size: 14px;
+  }
+  .detail-row:last-child { border-bottom: none; }
+  .detail-row .k { color: #94a3b8; }
+  .detail-row .v { color: #fff; font-weight: 600; }
+
+  .section-title {
+    font-size: 12px; color: #94a3b8; text-transform: uppercase;
+    letter-spacing: 0.5px; margin: 20px 0 12px;
+    font-weight: 600;
+  }
+
+  /* KYC image preview */
+  .kyc-imgs {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 10px; margin-top: 8px;
+  }
+  .kyc-img-box {
+    background: #0f172a; border-radius: 10px;
+    border: 1px solid #334155; padding: 8px;
+    text-align: center;
+  }
+  .kyc-img-box .label {
+    font-size: 11px; color: #94a3b8; margin-bottom: 6px;
+  }
+  .kyc-img-box img {
+    width: 100%; border-radius: 6px;
+    aspect-ratio: 16/10; object-fit: cover;
+    background: #334155;
+  }
+  .kyc-img-box .placeholder {
+    width: 100%; aspect-ratio: 16/10;
+    display: flex; align-items: center; justify-content: center;
+    background: #334155; border-radius: 6px; color: #64748b;
+    font-size: 12px;
   }
 </style>
 </head>
 <body>
 
-<!-- ═══════════════════════════════════════ -->
-<!-- LOGIN SCREEN -->
-<!-- ═══════════════════════════════════════ -->
+<!-- LOGIN -->
 <div id="login-screen" class="login-wrap">
   <div class="login-card">
     <h1>QuickCash Admin</h1>
@@ -155,9 +237,7 @@
   </div>
 </div>
 
-<!-- ═══════════════════════════════════════ -->
 <!-- DASHBOARD -->
-<!-- ═══════════════════════════════════════ -->
 <div id="dashboard" class="hidden">
   <header>
     <h1>QuickCash Admin</h1>
@@ -168,36 +248,64 @@
   </header>
 
   <main>
-    <!-- Tabs -->
     <div class="tabs">
       <button class="tab active" data-tab="overview">Overview</button>
       <button class="tab" data-tab="loans">Loans</button>
+      <button class="tab" data-tab="kyc">KYC <span id="kyc-badge" class="badge hidden"></span></button>
       <button class="tab" data-tab="users">Users</button>
     </div>
 
-    <!-- Overview Tab -->
+    <!-- Overview -->
     <div id="tab-overview">
       <div class="stats-grid" id="stats-grid">
         <div class="loading">Loading stats...</div>
       </div>
     </div>
 
-    <!-- Loans Tab -->
+    <!-- Loans -->
     <div id="tab-loans" class="hidden">
-      <div class="tabs">
-        <button class="tab-sub active" data-status="PENDING">Pending</button>
-        <button class="tab-sub" data-status="ACTIVE">Active</button>
-        <button class="tab-sub" data-status="PAID">Paid</button>
-        <button class="tab-sub" data-status="REJECTED">Rejected</button>
-        <button class="tab-sub" data-status="ALL">All</button>
+      <div class="toolbar">
+        <select id="loans-status">
+          <option value="PENDING">Pending</option>
+          <option value="ACTIVE">Active</option>
+          <option value="PAID">Paid</option>
+          <option value="REJECTED">Rejected</option>
+          <option value="ALL">All</option>
+        </select>
+        <select id="loans-range">
+          <option value="all">All time</option>
+          <option value="today">Today</option>
+          <option value="week">This week</option>
+          <option value="month">Last 30 days</option>
+        </select>
+        <button id="export-csv-btn" class="primary">⬇ Export CSV</button>
       </div>
       <div class="table-wrap" id="loans-table">
         <div class="loading">Loading loans...</div>
       </div>
     </div>
 
-    <!-- Users Tab -->
+    <!-- KYC -->
+    <div id="tab-kyc" class="hidden">
+      <div class="toolbar">
+        <select id="kyc-status">
+          <option value="PENDING">Pending</option>
+          <option value="VERIFIED">Verified</option>
+          <option value="REJECTED">Rejected</option>
+          <option value="ALL">All</option>
+        </select>
+      </div>
+      <div class="table-wrap" id="kyc-table">
+        <div class="loading">Loading KYC submissions...</div>
+      </div>
+    </div>
+
+    <!-- Users -->
     <div id="tab-users" class="hidden">
+      <div class="toolbar">
+        <input type="text" id="user-search" placeholder="Search by name, phone, or email..." />
+        <button id="user-search-btn">Search</button>
+      </div>
       <div class="table-wrap" id="users-table">
         <div class="loading">Loading users...</div>
       </div>
@@ -205,16 +313,14 @@
   </main>
 </div>
 
+<!-- MODAL -->
+<div id="modal-container" class="hidden"></div>
+
 <script>
-// ═══════════════════════════════════════
-// CONFIG
-// ═══════════════════════════════════════
 const API = '/api/admin';
 let token = localStorage.getItem('admin_token');
+let kycPendingCount = 0;
 
-// ═══════════════════════════════════════
-// HELPERS
-// ═══════════════════════════════════════
 function authHeaders() {
   return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token };
 }
@@ -235,10 +341,11 @@ async function api(path, options = {}) {
   return res.json();
 }
 
-function money(n) {
-  return '$' + Number(n || 0).toFixed(2);
+function money(n) { return '$' + Number(n || 0).toFixed(2); }
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"]/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
-
 function fmtDate(s) {
   if (!s) return '—';
   return new Date(s).toLocaleString('en-GB', {
@@ -247,14 +354,9 @@ function fmtDate(s) {
   });
 }
 
-function esc(s) {
-  return String(s ?? '').replace(/[&<>"]/g, c =>
-    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-}
-
-// ═══════════════════════════════════════
-// LOGIN / LOGOUT
-// ═══════════════════════════════════════
+// ─────────────────────────────────────────────
+// LOGIN
+// ─────────────────────────────────────────────
 const loginScreen = document.getElementById('login-screen');
 const dashboard = document.getElementById('dashboard');
 const loginError = document.getElementById('login-error');
@@ -297,7 +399,8 @@ function showDashboard() {
   loginScreen.classList.add('hidden');
   dashboard.classList.remove('hidden');
   loadStats();
-  loadLoans('PENDING');
+  loadLoans();
+  loadKyc();
   loadUsers();
 }
 
@@ -307,67 +410,76 @@ document.getElementById('password-input').addEventListener('keydown', e => {
 });
 document.getElementById('logout-btn').onclick = logout;
 
-// ═══════════════════════════════════════
+// ─────────────────────────────────────────────
 // TABS
-// ═══════════════════════════════════════
+// ─────────────────────────────────────────────
 document.querySelectorAll('.tab').forEach(tab => {
   tab.onclick = () => {
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
     tab.classList.add('active');
     const name = tab.dataset.tab;
-    document.getElementById('tab-overview').classList.toggle('hidden', name !== 'overview');
-    document.getElementById('tab-loans').classList.toggle('hidden', name !== 'loans');
-    document.getElementById('tab-users').classList.toggle('hidden', name !== 'users');
+    ['overview', 'loans', 'kyc', 'users'].forEach(n => {
+      document.getElementById('tab-' + n).classList.toggle('hidden', n !== name);
+    });
   };
 });
 
-document.querySelectorAll('.tab-sub').forEach(tab => {
-  tab.onclick = () => {
-    document.querySelectorAll('.tab-sub').forEach(t => t.classList.remove('active'));
-    tab.classList.add('active');
-    loadLoans(tab.dataset.status);
-  };
-});
-
-// ═══════════════════════════════════════
-// DATA LOADERS
-// ═══════════════════════════════════════
+// ─────────────────────────────────────────────
+// STATS
+// ─────────────────────────────────────────────
 async function loadStats() {
   const grid = document.getElementById('stats-grid');
   try {
     const s = await api('/stats');
+    kycPendingCount = s.kycPending || 0;
+    updateKycBadge();
+
     grid.innerHTML = `
       <div class="stat-card accent-blue"><div class="label">Total Users</div><div class="value">${s.totalUsers}</div></div>
       <div class="stat-card accent-green"><div class="label">KYC Verified</div><div class="value">${s.kycVerified}</div></div>
+      <div class="stat-card accent-orange"><div class="label">KYC Pending</div><div class="value">${s.kycPending}</div></div>
       <div class="stat-card accent-orange"><div class="label">Pending Loans</div><div class="value">${s.pendingLoans}</div></div>
       <div class="stat-card accent-green"><div class="label">Active Loans</div><div class="value">${s.activeLoans}</div></div>
       <div class="stat-card accent-blue"><div class="label">Paid Loans</div><div class="value">${s.paidLoans}</div></div>
       <div class="stat-card accent-purple"><div class="label">Total Disbursed</div><div class="value">${money(s.totalDisbursed)}</div></div>
       <div class="stat-card accent-green"><div class="label">Total Collected</div><div class="value">${money(s.totalCollected)}</div></div>
-      <div class="stat-card accent-orange"><div class="label">Outstanding</div><div class="value">${money(s.totalExpected - s.totalCollected)}</div></div>
+      <div class="stat-card accent-red"><div class="label">Outstanding</div><div class="value">${money(s.totalExpected - s.totalCollected)}</div></div>
     `;
   } catch (e) {
     grid.innerHTML = `<div class="empty">Error: ${e.message}</div>`;
   }
 }
 
-async function loadLoans(status) {
+function updateKycBadge() {
+  const b = document.getElementById('kyc-badge');
+  if (kycPendingCount > 0) {
+    b.textContent = kycPendingCount;
+    b.classList.remove('hidden');
+  } else {
+    b.classList.add('hidden');
+  }
+}
+
+// ─────────────────────────────────────────────
+// LOANS
+// ─────────────────────────────────────────────
+async function loadLoans() {
   const wrap = document.getElementById('loans-table');
   wrap.innerHTML = '<div class="loading">Loading loans...</div>';
+  const status = document.getElementById('loans-status').value;
+  const range = document.getElementById('loans-range').value;
   try {
-    const data = await api('/loans?status=' + status);
+    const data = await api('/loans?status=' + status + '&range=' + range);
     if (!data.loans.length) {
       wrap.innerHTML = '<div class="empty">No loans in this category</div>';
       return;
     }
     wrap.innerHTML = `
       <table>
-        <thead>
-          <tr>
-            <th>User</th><th>Amount</th><th>Total Due</th><th>Outstanding</th>
-            <th>Duration</th><th>Status</th><th>Applied</th><th>Actions</th>
-          </tr>
-        </thead>
+        <thead><tr>
+          <th>User</th><th>Amount</th><th>Total Due</th><th>Outstanding</th>
+          <th>Duration</th><th>Status</th><th>Applied</th><th>Actions</th>
+        </tr></thead>
         <tbody>
           ${data.loans.map(l => `
             <tr>
@@ -394,56 +506,29 @@ async function loadLoans(status) {
   }
 }
 
-async function loadUsers() {
-  const wrap = document.getElementById('users-table');
-  wrap.innerHTML = '<div class="loading">Loading users...</div>';
-  try {
-    const data = await api('/users');
-    if (!data.users.length) {
-      wrap.innerHTML = '<div class="empty">No users yet</div>';
-      return;
-    }
-    wrap.innerHTML = `
-      <table>
-        <thead>
-          <tr>
-            <th>Name</th><th>Phone</th><th>KYC</th><th>Credit Score</th>
-            <th>Loans</th><th>Guarantors</th><th>Joined</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${data.users.map(u => `
-            <tr>
-              <td>${esc(u.name || '—')}</td>
-              <td>${esc(u.phone)}</td>
-              <td><span class="badge ${u.kycStatus}">${u.kycStatus}</span></td>
-              <td>${u.creditScore}</td>
-              <td>${u._count.loans}</td>
-              <td>${u._count.guarantors}</td>
-              <td>${fmtDate(u.createdAt)}</td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-    `;
-  } catch (e) {
-    wrap.innerHTML = `<div class="empty">Error: ${e.message}</div>`;
-  }
-}
+document.getElementById('loans-status').onchange = loadLoans;
+document.getElementById('loans-range').onchange = loadLoans;
+document.getElementById('export-csv-btn').onclick = () => {
+  const status = document.getElementById('loans-status').value;
+  const url = 'https://quickcash-backend-production-5837.up.railway.app/api/admin/export/loans.csv?status=' + status;
+  fetch(url, { headers: { 'Authorization': 'Bearer ' + token } })
+    .then(r => r.blob())
+    .then(blob => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'loans-' + Date.now() + '.csv';
+      a.click();
+    });
+};
 
-// ═══════════════════════════════════════
-// ACTIONS
-// ═══════════════════════════════════════
 async function approveLoan(id) {
   if (!confirm('Approve this loan?')) return;
   try {
     await api('/loans/' + id + '/approve', { method: 'POST' });
     alert('Loan approved ✅');
-    loadLoans(document.querySelector('.tab-sub.active').dataset.status);
+    loadLoans();
     loadStats();
-  } catch (e) {
-    alert('Error: ' + e.message);
-  }
+  } catch (e) { alert('Error: ' + e.message); }
 }
 
 async function rejectLoan(id) {
@@ -455,26 +540,230 @@ async function rejectLoan(id) {
       body: JSON.stringify({ reason }),
     });
     alert('Loan rejected');
-    loadLoans(document.querySelector('.tab-sub.active').dataset.status);
+    loadLoans();
     loadStats();
+  } catch (e) { alert('Error: ' + e.message); }
+}
+
+// ─────────────────────────────────────────────
+// KYC
+// ─────────────────────────────────────────────
+async function loadKyc() {
+  const wrap = document.getElementById('kyc-table');
+  wrap.innerHTML = '<div class="loading">Loading KYC...</div>';
+  const status = document.getElementById('kyc-status').value;
+  try {
+    const data = await api('/kyc?status=' + status);
+    if (!data.submissions.length) {
+      wrap.innerHTML = '<div class="empty">No KYC submissions</div>';
+      return;
+    }
+    wrap.innerHTML = `
+      <table>
+        <thead><tr>
+          <th>User</th><th>Document</th><th>Status</th><th>Submitted</th><th>Actions</th>
+        </tr></thead>
+        <tbody>
+          ${data.submissions.map(k => `
+            <tr>
+              <td>${esc(k.user?.name || k.user?.phone)}<br><span style="font-size:11px;color:#64748b">${esc(k.user?.phone || '')}</span></td>
+              <td>${esc(k.documentType)}</td>
+              <td><span class="badge ${k.status}">${k.status}</span></td>
+              <td>${fmtDate(k.createdAt)}</td>
+              <td>
+                <button class="btn btn-view" onclick="viewKyc('${k.id}')">View</button>
+                ${k.status === 'PENDING' ? `
+                  <button class="btn btn-approve" onclick="approveKyc('${k.id}')">Approve</button>
+                  <button class="btn btn-reject" onclick="rejectKyc('${k.id}')">Reject</button>
+                ` : ''}
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+    window.__kycCache = data.submissions;
+  } catch (e) {
+    wrap.innerHTML = `<div class="empty">Error: ${e.message}</div>`;
+  }
+}
+
+document.getElementById('kyc-status').onchange = loadKyc;
+
+async function approveKyc(id) {
+  if (!confirm('Approve this KYC submission?')) return;
+  try {
+    await api('/kyc/' + id + '/approve', { method: 'POST' });
+    alert('KYC approved ✅');
+    loadKyc();
+    loadStats();
+  } catch (e) { alert('Error: ' + e.message); }
+}
+
+async function rejectKyc(id) {
+  const reason = prompt('Reason for rejection (e.g., "Photo unclear"):');
+  if (reason === null) return;
+  try {
+    await api('/kyc/' + id + '/reject', {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    });
+    alert('KYC rejected');
+    loadKyc();
+    loadStats();
+  } catch (e) { alert('Error: ' + e.message); }
+}
+
+function viewKyc(id) {
+  const k = (window.__kycCache || []).find(x => x.id === id);
+  if (!k) return;
+
+  const img = (url, label) => {
+    if (url && !url.startsWith('https://example.com')) {
+      return `<div class="kyc-img-box"><div class="label">${label}</div><img src="${esc(url)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="placeholder" style="display:none">No image</div></div>`;
+    }
+    return `<div class="kyc-img-box"><div class="label">${label}</div><div class="placeholder">No image uploaded</div></div>`;
+  };
+
+  openModal(`
+    <div class="modal-header">
+      <h2>KYC Submission — ${esc(k.user?.name || k.user?.phone)}</h2>
+      <button onclick="closeModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="detail-row"><span class="k">Phone</span><span class="v">${esc(k.user?.phone)}</span></div>
+      <div class="detail-row"><span class="k">Document Type</span><span class="v">${esc(k.documentType)}</span></div>
+      <div class="detail-row"><span class="k">Status</span><span class="v"><span class="badge ${k.status}">${k.status}</span></span></div>
+      <div class="detail-row"><span class="k">Submitted</span><span class="v">${fmtDate(k.createdAt)}</span></div>
+
+      <div class="section-title">Documents</div>
+      <div class="kyc-imgs">
+        ${img(k.frontImageUrl, 'Front')}
+        ${img(k.backImageUrl, 'Back')}
+        ${img(k.selfieUrl, 'Selfie')}
+      </div>
+    </div>
+  `);
+}
+
+// ─────────────────────────────────────────────
+// USERS
+// ─────────────────────────────────────────────
+async function loadUsers() {
+  const wrap = document.getElementById('users-table');
+  wrap.innerHTML = '<div class="loading">Loading users...</div>';
+  const q = document.getElementById('user-search').value.trim();
+  try {
+    const data = await api('/users?q=' + encodeURIComponent(q));
+    if (!data.users.length) {
+      wrap.innerHTML = '<div class="empty">No users found</div>';
+      return;
+    }
+    wrap.innerHTML = `
+      <table>
+        <thead><tr>
+          <th>Name</th><th>Phone</th><th>KYC</th><th>Credit Score</th>
+          <th>Loans</th><th>Guarantors</th><th>Joined</th><th>Actions</th>
+        </tr></thead>
+        <tbody>
+          ${data.users.map(u => `
+            <tr>
+              <td>${esc(u.name || '—')}</td>
+              <td>${esc(u.phone)}</td>
+              <td><span class="badge ${u.kycStatus}">${u.kycStatus}</span></td>
+              <td>${u.creditScore}</td>
+              <td>${u._count.loans}</td>
+              <td>${u._count.guarantors}</td>
+              <td>${fmtDate(u.createdAt)}</td>
+              <td><button class="btn btn-view" onclick="viewUser('${u.id}')">View</button></td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  } catch (e) {
+    wrap.innerHTML = `<div class="empty">Error: ${e.message}</div>`;
+  }
+}
+
+document.getElementById('user-search-btn').onclick = loadUsers;
+document.getElementById('user-search').addEventListener('keydown', e => {
+  if (e.key === 'Enter') loadUsers();
+});
+
+async function viewUser(id) {
+  try {
+    const data = await api('/users/' + id);
+    const u = data.user;
+
+    const loansHtml = u.loans.length === 0
+      ? '<div class="empty" style="padding:16px">No loans yet</div>'
+      : u.loans.map(l => `
+          <div class="detail-row">
+            <span class="k">${money(l.amount)} • ${fmtDate(l.appliedAt)}</span>
+            <span class="v"><span class="badge ${l.status}">${l.status}</span></span>
+          </div>
+        `).join('');
+
+    const guarantorsHtml = u.guarantors.length === 0
+      ? '<div class="empty" style="padding:16px">No guarantors</div>'
+      : u.guarantors.map(g => `
+          <div class="detail-row">
+            <span class="k">${esc(g.name)} • ${esc(g.relationship)}</span>
+            <span class="v"><span class="badge ${g.status === 'VERIFIED' ? 'VERIFIED' : 'PENDING'}">${g.status}</span></span>
+          </div>
+        `).join('');
+
+    openModal(`
+      <div class="modal-header">
+        <h2>${esc(u.name || 'User')}</h2>
+        <button onclick="closeModal()">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="detail-row"><span class="k">Phone</span><span class="v">${esc(u.phone)}</span></div>
+        <div class="detail-row"><span class="k">Email</span><span class="v">${esc(u.email || '—')}</span></div>
+        <div class="detail-row"><span class="k">KYC Status</span><span class="v"><span class="badge ${u.kycStatus}">${u.kycStatus}</span></span></div>
+        <div class="detail-row"><span class="k">Credit Score</span><span class="v">${u.creditScore}</span></div>
+        <div class="detail-row"><span class="k">Joined</span><span class="v">${fmtDate(u.createdAt)}</span></div>
+
+        <div class="section-title">Loans (${u.loans.length})</div>
+        ${loansHtml}
+
+        <div class="section-title">Guarantors (${u.guarantors.length})</div>
+        ${guarantorsHtml}
+      </div>
+    `);
   } catch (e) {
     alert('Error: ' + e.message);
   }
 }
 
-// Refresh button
+// ─────────────────────────────────────────────
+// MODAL
+// ─────────────────────────────────────────────
+function openModal(contentHtml) {
+  const c = document.getElementById('modal-container');
+  c.innerHTML = `<div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal">${contentHtml}</div>
+  </div>`;
+  c.classList.remove('hidden');
+}
+
+function closeModal() {
+  document.getElementById('modal-container').classList.add('hidden');
+  document.getElementById('modal-container').innerHTML = '';
+}
+
+// Refresh
 document.getElementById('refresh-btn').onclick = () => {
   loadStats();
-  loadLoans(document.querySelector('.tab-sub.active').dataset.status);
+  loadLoans();
+  loadKyc();
   loadUsers();
 };
 
-// ═══════════════════════════════════════
-// AUTO-LOGIN if token exists
-// ═══════════════════════════════════════
-if (token) {
-  showDashboard();
-}
+// Auto login
+if (token) showDashboard();
 </script>
 </body>
 </html>
