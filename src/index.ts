@@ -10,6 +10,7 @@ import kycRoutes from './routes/kyc';
 import adminRoutes from './routes/admin';
 import notificationRoutes from './routes/notifications';
 import referralRoutes from './routes/referral';
+import savingsRoutes from './routes/savings';
 
 dotenv.config();
 
@@ -37,6 +38,7 @@ app.use('/api/kyc', kycRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/referral', referralRoutes);
+app.use('/api/savings', savingsRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ error: 'Not found' });

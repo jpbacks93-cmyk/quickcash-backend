@@ -31,6 +31,7 @@ model User {
   guarantors        Guarantor[]
   kyc               Kyc?
   notifications     Notification[]
+  savings           Savings?
   referredBy        User?          @relation("Referrals", fields: [referredById], references: [id], onDelete: SetNull)
   referredUsers     User[]         @relation("Referrals")
 
@@ -147,4 +148,36 @@ model Notification {
 
   @@index([userId])
   @@index([userId, read])
+}
+
+// ─────────────────────────────────────────────
+// SAVINGS
+// ─────────────────────────────────────────────
+model Savings {
+  id        String    @id @default(cuid())
+  userId    String    @unique
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  balance   Float     @default(0)
+  goal      Float?
+  goalName  String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  transactions SavingsTransaction[]
+}
+
+// ─────────────────────────────────────────────
+// SAVINGS TRANSACTIONS
+// ─────────────────────────────────────────────
+model SavingsTransaction {
+  id        String   @id @default(cuid())
+  savingsId String
+  savings   Savings  @relation(fields: [savingsId], references: [id], onDelete: Cascade)
+  type      String   // DEPOSIT, WITHDRAWAL
+  amount    Float
+  method    String?  // MTN_MOMO, AIRTEL_MONEY, BANK
+  reference String?
+  createdAt DateTime @default(now())
+
+  @@index([savingsId])
 }

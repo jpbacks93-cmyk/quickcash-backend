@@ -15,6 +15,7 @@ const kyc_1 = __importDefault(require("./routes/kyc"));
 const admin_1 = __importDefault(require("./routes/admin"));
 const notifications_1 = __importDefault(require("./routes/notifications"));
 const referral_1 = __importDefault(require("./routes/referral"));
+const savings_1 = __importDefault(require("./routes/savings"));
 dotenv_1.default.config();
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 3000;
@@ -35,6 +36,7 @@ app.use('/api/kyc', kyc_1.default);
 app.use('/api/admin', admin_1.default);
 app.use('/api/notifications', notifications_1.default);
 app.use('/api/referral', referral_1.default);
+app.use('/api/savings', savings_1.default);
 app.use((_req, res) => {
     res.status(404).json({ error: 'Not found' });
 });
