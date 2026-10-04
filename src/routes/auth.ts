@@ -5,12 +5,10 @@ import { prisma } from '../lib/prisma';
 import { signToken } from '../lib/jwt';
 import { requireAuth, AuthRequest } from '../middleware/auth';
 import { sendOtpSms } from '../lib/sms';
+import { generateUniqueReferralCode } from '../lib/referral';
 
 const router = Router();
 
-// ─────────────────────────────────────────────
-// OTP generation & dev-mode helpers
-// ─────────────────────────────────────────────
 function generateOtp(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
@@ -78,15 +76,17 @@ router.post('/send-otp', async (req, res) => {
 
 // ─────────────────────────────────────────────
 // POST /api/auth/verify-otp
+// Accepts optional referralCode for new users
 // ─────────────────────────────────────────────
 const verifyOtpSchema = z.object({
   phone: z.string().min(7),
   code: z.string().length(6),
+  referralCode: z.string().optional(),
 });
 
 router.post('/verify-otp', async (req, res) => {
   try {
-    const { phone, code } = verifyOtpSchema.parse(req.body);
+    const { phone, code, referralCode } = verifyOtpSchema.parse(req.body);
 
     const otp = await prisma.otp.findFirst({
       where: { phone },
@@ -119,9 +119,43 @@ router.post('/verify-otp', async (req, res) => {
     const isNewUser = !user;
 
     if (!user) {
+      // Generate unique referral code for new user
+      const newCode = await generateUniqueReferralCode();
+
+      // Check if a valid referral code was provided
+      let referredById: string | null = null;
+      if (referralCode && referralCode.trim().length > 0) {
+        const referrer = await prisma.user.findUnique({
+          where: { referralCode: referralCode.trim().toUpperCase() },
+        });
+        // Prevent self-referral (not possible for new user, but safe)
+        if (referrer) {
+          referredById = referrer.id;
+          console.log(
+            `[REFERRAL] New user ${phone} referred by ${referrer.phone}`
+          );
+        }
+      }
+
       user = await prisma.user.create({
-        data: { phone },
+        data: {
+          phone,
+          referralCode: newCode,
+          referredById,
+        },
       });
+
+      // Notify referrer about the new signup
+      if (referredById) {
+        await prisma.notification.create({
+          data: {
+            userId: referredById,
+            type: 'GUARANTOR_ADDED', // reuse existing icon
+            title: 'New Referral Signup! 🎉',
+            message: `Someone signed up using your referral code. You'll earn $5 when they get their first loan approved.`,
+          },
+        });
+      }
     }
 
     const token = signToken({ userId: user.id, phone: user.phone });
@@ -149,7 +183,7 @@ router.post('/verify-otp', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────
-// POST /api/auth/set-pin  (protected)
+// POST /api/auth/set-pin
 // ─────────────────────────────────────────────
 const setPinSchema = z.object({
   pin: z.string().length(4).regex(/^\d+$/, 'PIN must be digits'),
@@ -158,7 +192,6 @@ const setPinSchema = z.object({
 router.post('/set-pin', requireAuth, async (req: AuthRequest, res) => {
   try {
     const { pin } = setPinSchema.parse(req.body);
-
     const pinHash = await bcrypt.hash(pin, 10);
 
     await prisma.user.update({
@@ -177,7 +210,7 @@ router.post('/set-pin', requireAuth, async (req: AuthRequest, res) => {
 });
 
 // ─────────────────────────────────────────────
-// POST /api/auth/login-pin  (protected)
+// POST /api/auth/login-pin
 // ─────────────────────────────────────────────
 router.post('/login-pin', requireAuth, async (req: AuthRequest, res) => {
   try {
@@ -207,7 +240,7 @@ router.post('/login-pin', requireAuth, async (req: AuthRequest, res) => {
 });
 
 // ─────────────────────────────────────────────
-// POST /api/auth/change-pin  (protected)
+// POST /api/auth/change-pin
 // ─────────────────────────────────────────────
 const changePinSchema = z.object({
   oldPin: z.string().length(4).regex(/^\d+$/),

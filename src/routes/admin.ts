@@ -7,25 +7,16 @@ import { createNotification } from '../lib/notifications';
 
 const router = Router();
 
-// ─────────────────────────────────────────────
-// POST /api/admin/login
-// ─────────────────────────────────────────────
-const loginSchema = z.object({
-  password: z.string().min(4),
-});
-
+// Login
+const loginSchema = z.object({ password: z.string().min(4) });
 router.post('/login', async (req, res) => {
   try {
     const { password } = loginSchema.parse(req.body);
-
     const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
-
     if (password !== adminPassword) {
       return res.status(401).json({ error: 'Invalid password' });
     }
-
     const token = signToken({ role: 'ADMIN' });
-
     return res.json({ success: true, token });
   } catch (err: any) {
     if (err instanceof z.ZodError) {
@@ -36,29 +27,18 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────────
-// GET /api/admin/stats
-// ─────────────────────────────────────────────
+// Stats
 router.get('/stats', requireAdmin, async (_req, res) => {
   try {
     const [
-      totalUsers,
-      pendingLoans,
-      activeLoans,
-      paidLoans,
-      rejectedLoans,
-      kycVerified,
-      kycPending,
-      loanTotals,
-      repaidTotals,
+      totalUsers, pendingLoans, activeLoans, paidLoans, rejectedLoans,
+      kycVerified, kycPending, loanTotals, repaidTotals,
     ] = await Promise.all([
       prisma.user.count(),
       prisma.loan.count({ where: { status: 'PENDING' } }),
       prisma.loan.count({ where: { status: 'ACTIVE' } }),
       prisma.loan.count({ where: { status: 'PAID' } }),
-      prisma.loan.count({
-        where: { status: { in: ['REJECTED', 'DEFAULTED'] } },
-      }),
+      prisma.loan.count({ where: { status: { in: ['REJECTED', 'DEFAULTED'] } } }),
       prisma.user.count({ where: { kycStatus: 'VERIFIED' } }),
       prisma.kyc.count({ where: { status: 'PENDING' } }),
       prisma.loan.aggregate({
@@ -72,13 +52,8 @@ router.get('/stats', requireAdmin, async (_req, res) => {
     ]);
 
     return res.json({
-      totalUsers,
-      kycVerified,
-      kycPending,
-      pendingLoans,
-      activeLoans,
-      paidLoans,
-      rejectedLoans,
+      totalUsers, kycVerified, kycPending, pendingLoans, activeLoans,
+      paidLoans, rejectedLoans,
       totalDisbursed: loanTotals._sum.amount || 0,
       totalExpected: loanTotals._sum.totalDue || 0,
       totalCollected: repaidTotals._sum.amount || 0,
@@ -89,14 +64,11 @@ router.get('/stats', requireAdmin, async (_req, res) => {
   }
 });
 
-// ─────────────────────────────────────────────
-// GET /api/admin/users?q=search
-// List or search users
-// ─────────────────────────────────────────────
+// Users list + search
 router.get('/users', requireAdmin, async (req, res) => {
   try {
     const limit = Math.min(Number(req.query.limit) || 100, 500);
-    const q = (req.query.q as string || '').trim();
+    const q = ((req.query.q as string) || '').trim();
 
     const where: any = {};
     if (q) {
@@ -112,16 +84,9 @@ router.get('/users', requireAdmin, async (req, res) => {
       orderBy: { createdAt: 'desc' },
       take: limit,
       select: {
-        id: true,
-        phone: true,
-        name: true,
-        email: true,
-        kycStatus: true,
-        creditScore: true,
-        createdAt: true,
-        _count: {
-          select: { loans: true, guarantors: true },
-        },
+        id: true, phone: true, name: true, email: true,
+        kycStatus: true, creditScore: true, createdAt: true,
+        _count: { select: { loans: true, guarantors: true } },
       },
     });
 
@@ -132,42 +97,24 @@ router.get('/users', requireAdmin, async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────────
-// GET /api/admin/users/:id
-// Single user detail with everything
-// ─────────────────────────────────────────────
+// Single user detail
 router.get('/users/:id', requireAdmin, async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.params.id },
       select: {
-        id: true,
-        phone: true,
-        name: true,
-        email: true,
-        kycStatus: true,
-        creditScore: true,
-        createdAt: true,
-        updatedAt: true,
+        id: true, phone: true, name: true, email: true,
+        kycStatus: true, creditScore: true, createdAt: true, updatedAt: true,
         loans: {
           orderBy: { appliedAt: 'desc' },
-          include: {
-            repayments: {
-              orderBy: { createdAt: 'desc' },
-            },
-          },
+          include: { repayments: { orderBy: { createdAt: 'desc' } } },
         },
-        guarantors: {
-          orderBy: { createdAt: 'asc' },
-        },
+        guarantors: { orderBy: { createdAt: 'asc' } },
         kyc: true,
       },
     });
 
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
+    if (!user) return res.status(404).json({ error: 'User not found' });
     return res.json({ user });
   } catch (err) {
     console.error(err);
@@ -175,10 +122,7 @@ router.get('/users/:id', requireAdmin, async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────────
-// GET /api/admin/loans?status=PENDING&range=week
-// List loans with filters
-// ─────────────────────────────────────────────
+// Loans list with filters
 router.get('/loans', requireAdmin, async (req, res) => {
   try {
     const status = req.query.status as string | undefined;
@@ -186,15 +130,11 @@ router.get('/loans', requireAdmin, async (req, res) => {
     const limit = Math.min(Number(req.query.limit) || 100, 500);
 
     const where: any = {};
-
-    if (status && status !== 'ALL') {
-      where.status = status;
-    }
+    if (status && status !== 'ALL') where.status = status;
 
     if (range && range !== 'all') {
       const now = new Date();
       let from: Date;
-
       switch (range) {
         case 'today':
           from = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -208,7 +148,6 @@ router.get('/loans', requireAdmin, async (req, res) => {
         default:
           from = new Date(0);
       }
-
       where.appliedAt = { gte: from };
     }
 
@@ -217,12 +156,8 @@ router.get('/loans', requireAdmin, async (req, res) => {
       orderBy: { appliedAt: 'desc' },
       take: limit,
       include: {
-        user: {
-          select: { id: true, phone: true, name: true, kycStatus: true },
-        },
-        repayments: {
-          select: { amount: true, status: true },
-        },
+        user: { select: { id: true, phone: true, name: true, kycStatus: true } },
+        repayments: { select: { amount: true, status: true } },
       },
     });
 
@@ -230,7 +165,6 @@ router.get('/loans', requireAdmin, async (req, res) => {
       const totalRepaid = loan.repayments
         .filter((r) => r.status === 'SUCCESSFUL')
         .reduce((sum, r) => sum + r.amount, 0);
-
       return {
         ...loan,
         totalRepaid,
@@ -245,26 +179,18 @@ router.get('/loans', requireAdmin, async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────────
-// GET /api/admin/kyc?status=PENDING
-// KYC review queue
-// ─────────────────────────────────────────────
+// KYC list
 router.get('/kyc', requireAdmin, async (req, res) => {
   try {
     const status = req.query.status as string | undefined;
-
     const where: any = {};
-    if (status && status !== 'ALL') {
-      where.status = status;
-    }
+    if (status && status !== 'ALL') where.status = status;
 
     const submissions = await prisma.kyc.findMany({
       where,
       orderBy: { createdAt: 'desc' },
       include: {
-        user: {
-          select: { id: true, phone: true, name: true },
-        },
+        user: { select: { id: true, phone: true, name: true } },
       },
     });
 
@@ -275,18 +201,11 @@ router.get('/kyc', requireAdmin, async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────────
-// POST /api/admin/kyc/:id/approve
-// ─────────────────────────────────────────────
+// KYC approve
 router.post('/kyc/:id/approve', requireAdmin, async (req, res) => {
   try {
-    const kyc = await prisma.kyc.findUnique({
-      where: { id: req.params.id },
-    });
-
-    if (!kyc) {
-      return res.status(404).json({ error: 'KYC not found' });
-    }
+    const kyc = await prisma.kyc.findUnique({ where: { id: req.params.id } });
+    if (!kyc) return res.status(404).json({ error: 'KYC not found' });
 
     await prisma.kyc.update({
       where: { id: kyc.id },
@@ -304,8 +223,7 @@ router.post('/kyc/:id/approve', requireAdmin, async (req, res) => {
       userId: kyc.userId,
       type: 'KYC_VERIFIED',
       title: 'Identity Verified ✅',
-      message:
-        'Your identity has been verified. You can now apply for higher loan limits.',
+      message: 'Your identity has been verified. You can now apply for higher loan limits.',
     });
 
     return res.json({ success: true });
@@ -315,24 +233,13 @@ router.post('/kyc/:id/approve', requireAdmin, async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────────
-// POST /api/admin/kyc/:id/reject
-// ─────────────────────────────────────────────
-const rejectKycSchema = z.object({
-  reason: z.string().max(200).optional(),
-});
-
+// KYC reject
+const rejectKycSchema = z.object({ reason: z.string().max(200).optional() });
 router.post('/kyc/:id/reject', requireAdmin, async (req, res) => {
   try {
     const { reason } = rejectKycSchema.parse(req.body || {});
-
-    const kyc = await prisma.kyc.findUnique({
-      where: { id: req.params.id },
-    });
-
-    if (!kyc) {
-      return res.status(404).json({ error: 'KYC not found' });
-    }
+    const kyc = await prisma.kyc.findUnique({ where: { id: req.params.id } });
+    if (!kyc) return res.status(404).json({ error: 'KYC not found' });
 
     await prisma.kyc.update({
       where: { id: kyc.id },
@@ -350,9 +257,7 @@ router.post('/kyc/:id/reject', requireAdmin, async (req, res) => {
       userId: kyc.userId,
       type: 'LOAN_REJECTED',
       title: 'KYC Verification Failed',
-      message:
-        reason ||
-        'Your identity documents could not be verified. Please resubmit clear photos.',
+      message: reason || 'Your identity documents could not be verified. Please resubmit clear photos.',
     });
 
     return res.json({ success: true });
@@ -366,7 +271,7 @@ router.post('/kyc/:id/reject', requireAdmin, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────
-// POST /api/admin/loans/:id/approve
+// Approve loan + trigger referral bonus
 // ─────────────────────────────────────────────
 router.post('/loans/:id/approve', requireAdmin, async (req: AdminRequest, res) => {
   try {
@@ -374,11 +279,10 @@ router.post('/loans/:id/approve', requireAdmin, async (req: AdminRequest, res) =
 
     const loan = await prisma.loan.findUnique({
       where: { id: loanId },
+      include: { user: true },
     });
 
-    if (!loan) {
-      return res.status(404).json({ error: 'Loan not found' });
-    }
+    if (!loan) return res.status(404).json({ error: 'Loan not found' });
 
     if (loan.status !== 'PENDING') {
       return res.status(400).json({
@@ -392,15 +296,12 @@ router.post('/loans/:id/approve', requireAdmin, async (req: AdminRequest, res) =
 
     const updated = await prisma.loan.update({
       where: { id: loanId },
-      data: {
-        status: 'ACTIVE',
-        approvedAt: new Date(),
-        dueDate,
-      },
+      data: { status: 'ACTIVE', approvedAt: new Date(), dueDate },
     });
 
     console.log(`[ADMIN] Approved loan ${loanId}`);
 
+    // Notify borrower
     await createNotification({
       userId: loan.userId,
       type: 'LOAN_APPROVED',
@@ -409,6 +310,46 @@ router.post('/loans/:id/approve', requireAdmin, async (req: AdminRequest, res) =
       metadata: { loanId: loan.id },
     });
 
+    // ─── Referral bonus trigger ─────────────
+    if (loan.user.referredById && !loan.user.referralBonusPaid) {
+      const REFERRER_BONUS = 5;
+      const REFEREE_BONUS = 5;
+
+      // Mark bonus as paid (prevents duplicate)
+      await prisma.user.update({
+        where: { id: loan.userId },
+        data: {
+          referralBonusPaid: true,
+          referralCredit: { increment: REFEREE_BONUS },
+        },
+      });
+
+      // Credit referrer
+      await prisma.user.update({
+        where: { id: loan.user.referredById },
+        data: { referralCredit: { increment: REFERRER_BONUS } },
+      });
+
+      // Notify both
+      await createNotification({
+        userId: loan.userId,
+        type: 'GUARANTOR_VERIFIED', // reuse type
+        title: 'Referral Bonus Received! 🎁',
+        message: `You earned $${REFEREE_BONUS} credit for joining with a referral code.`,
+      });
+
+      await createNotification({
+        userId: loan.user.referredById,
+        type: 'GUARANTOR_VERIFIED',
+        title: 'Referral Bonus Earned! 🎉',
+        message: `You earned $${REFERRER_BONUS} credit because someone you referred got approved.`,
+      });
+
+      console.log(
+        `[REFERRAL] Bonus paid: referrer ${loan.user.referredById} +$${REFERRER_BONUS}, referee ${loan.userId} +$${REFEREE_BONUS}`
+      );
+    }
+
     return res.json({ success: true, loan: updated });
   } catch (err) {
     console.error(err);
@@ -416,25 +357,15 @@ router.post('/loans/:id/approve', requireAdmin, async (req: AdminRequest, res) =
   }
 });
 
-// ─────────────────────────────────────────────
-// POST /api/admin/loans/:id/reject
-// ─────────────────────────────────────────────
-const rejectSchema = z.object({
-  reason: z.string().max(200).optional(),
-});
-
+// Reject loan
+const rejectSchema = z.object({ reason: z.string().max(200).optional() });
 router.post('/loans/:id/reject', requireAdmin, async (req, res) => {
   try {
     const loanId = req.params.id;
     const { reason } = rejectSchema.parse(req.body || {});
 
-    const loan = await prisma.loan.findUnique({
-      where: { id: loanId },
-    });
-
-    if (!loan) {
-      return res.status(404).json({ error: 'Loan not found' });
-    }
+    const loan = await prisma.loan.findUnique({ where: { id: loanId } });
+    if (!loan) return res.status(404).json({ error: 'Loan not found' });
 
     if (loan.status !== 'PENDING') {
       return res.status(400).json({
@@ -442,8 +373,7 @@ router.post('/loans/:id/reject', requireAdmin, async (req, res) => {
       });
     }
 
-    const rejectionReason =
-      reason || 'Application did not meet our criteria';
+    const rejectionReason = reason || 'Application did not meet our criteria';
 
     const updated = await prisma.loan.update({
       where: { id: loanId },
@@ -454,9 +384,7 @@ router.post('/loans/:id/reject', requireAdmin, async (req, res) => {
       },
     });
 
-    console.log(
-      `[ADMIN] Rejected loan ${loanId} — Reason: ${rejectionReason}`
-    );
+    console.log(`[ADMIN] Rejected loan ${loanId} — Reason: ${rejectionReason}`);
 
     await createNotification({
       userId: loan.userId,
@@ -476,18 +404,12 @@ router.post('/loans/:id/reject', requireAdmin, async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────────
-// GET /api/admin/export/loans.csv
-// CSV export of loans
-// ─────────────────────────────────────────────
+// CSV export
 router.get('/export/loans.csv', requireAdmin, async (req, res) => {
   try {
     const status = req.query.status as string | undefined;
-
     const where: any = {};
-    if (status && status !== 'ALL') {
-      where.status = status;
-    }
+    if (status && status !== 'ALL') where.status = status;
 
     const loans = await prisma.loan.findMany({
       where,

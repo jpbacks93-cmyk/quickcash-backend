@@ -1,5 +1,4 @@
 // Prisma Schema — QuickCash Backend
-// Docs: https://pris.ly/d/prisma-schema
 
 generator client {
   provider = "prisma-client-js"
@@ -14,22 +13,29 @@ datasource db {
 // USERS
 // ─────────────────────────────────────────────
 model User {
-  id            String         @id @default(cuid())
-  phone         String         @unique
-  name          String?
-  email         String?
-  pinHash       String?
-  kycStatus     String         @default("PENDING")
-  creditScore   Int            @default(500)
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  id                String         @id @default(cuid())
+  phone             String         @unique
+  name              String?
+  email             String?
+  pinHash           String?
+  kycStatus         String         @default("PENDING")
+  creditScore       Int            @default(500)
+  referralCode      String?        @unique
+  referredById      String?
+  referralCredit    Float          @default(0)
+  referralBonusPaid Boolean        @default(false)
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
 
-  loans         Loan[]
-  guarantors    Guarantor[]
-  kyc           Kyc?
-  notifications Notification[]
+  loans             Loan[]
+  guarantors        Guarantor[]
+  kyc               Kyc?
+  notifications     Notification[]
+  referredBy        User?          @relation("Referrals", fields: [referredById], references: [id], onDelete: SetNull)
+  referredUsers     User[]         @relation("Referrals")
 
   @@index([phone])
+  @@index([referralCode])
 }
 
 // ─────────────────────────────────────────────
@@ -102,6 +108,7 @@ model Loan {
   dueDate         DateTime?
   rejectionReason String?
   rejectedAt      DateTime?
+  creditApplied   Float     @default(0)
 
   repayments      Repayment[]
 
@@ -131,11 +138,11 @@ model Notification {
   id        String   @id @default(cuid())
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type      String   // LOAN_APPROVED, LOAN_REJECTED, REPAYMENT, KYC_VERIFIED, LOAN_APPLIED, GUARANTOR_VERIFIED
+  type      String
   title     String
   message   String
   read      Boolean  @default(false)
-  metadata  String?  // Optional JSON string for extra data
+  metadata  String?
   createdAt DateTime @default(now())
 
   @@index([userId])

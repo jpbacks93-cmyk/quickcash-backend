@@ -14,22 +14,19 @@ const guarantors_1 = __importDefault(require("./routes/guarantors"));
 const kyc_1 = __importDefault(require("./routes/kyc"));
 const admin_1 = __importDefault(require("./routes/admin"));
 const notifications_1 = __importDefault(require("./routes/notifications"));
+const referral_1 = __importDefault(require("./routes/referral"));
 dotenv_1.default.config();
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 3000;
 app.use((0, cors_1.default)());
 app.use(express_1.default.json({ limit: '10mb' }));
-// Serve static files (admin panel)
 app.use(express_1.default.static(path_1.default.join(__dirname, '..', 'public')));
-// Health check
 app.get('/health', (_req, res) => {
     res.json({ ok: true, service: 'quickcash-backend', time: new Date() });
 });
-// Admin HTML page
 app.get('/admin', (_req, res) => {
     res.sendFile(path_1.default.join(__dirname, '..', 'public', 'admin.html'));
 });
-// API routes
 app.use('/api/auth', auth_1.default);
 app.use('/api/user', user_1.default);
 app.use('/api/loans', loans_1.default);
@@ -37,7 +34,7 @@ app.use('/api/guarantors', guarantors_1.default);
 app.use('/api/kyc', kyc_1.default);
 app.use('/api/admin', admin_1.default);
 app.use('/api/notifications', notifications_1.default);
-// 404
+app.use('/api/referral', referral_1.default);
 app.use((_req, res) => {
     res.status(404).json({ error: 'Not found' });
 });

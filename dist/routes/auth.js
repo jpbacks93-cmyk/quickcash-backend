@@ -10,10 +10,8 @@ const prisma_1 = require("../lib/prisma");
 const jwt_1 = require("../lib/jwt");
 const auth_1 = require("../middleware/auth");
 const sms_1 = require("../lib/sms");
+const referral_1 = require("../lib/referral");
 const router = (0, express_1.Router)();
-// ─────────────────────────────────────────────
-// OTP generation & dev-mode helpers
-// ─────────────────────────────────────────────
 function generateOtp() {
     return Math.floor(100000 + Math.random() * 900000).toString();
 }
@@ -71,14 +69,16 @@ router.post('/send-otp', async (req, res) => {
 });
 // ─────────────────────────────────────────────
 // POST /api/auth/verify-otp
+// Accepts optional referralCode for new users
 // ─────────────────────────────────────────────
 const verifyOtpSchema = zod_1.z.object({
     phone: zod_1.z.string().min(7),
     code: zod_1.z.string().length(6),
+    referralCode: zod_1.z.string().optional(),
 });
 router.post('/verify-otp', async (req, res) => {
     try {
-        const { phone, code } = verifyOtpSchema.parse(req.body);
+        const { phone, code, referralCode } = verifyOtpSchema.parse(req.body);
         const otp = await prisma_1.prisma.otp.findFirst({
             where: { phone },
             orderBy: { createdAt: 'desc' },
@@ -104,9 +104,38 @@ router.post('/verify-otp', async (req, res) => {
         let user = await prisma_1.prisma.user.findUnique({ where: { phone } });
         const isNewUser = !user;
         if (!user) {
+            // Generate unique referral code for new user
+            const newCode = await (0, referral_1.generateUniqueReferralCode)();
+            // Check if a valid referral code was provided
+            let referredById = null;
+            if (referralCode && referralCode.trim().length > 0) {
+                const referrer = await prisma_1.prisma.user.findUnique({
+                    where: { referralCode: referralCode.trim().toUpperCase() },
+                });
+                // Prevent self-referral (not possible for new user, but safe)
+                if (referrer) {
+                    referredById = referrer.id;
+                    console.log(`[REFERRAL] New user ${phone} referred by ${referrer.phone}`);
+                }
+            }
             user = await prisma_1.prisma.user.create({
-                data: { phone },
+                data: {
+                    phone,
+                    referralCode: newCode,
+                    referredById,
+                },
             });
+            // Notify referrer about the new signup
+            if (referredById) {
+                await prisma_1.prisma.notification.create({
+                    data: {
+                        userId: referredById,
+                        type: 'GUARANTOR_ADDED', // reuse existing icon
+                        title: 'New Referral Signup! 🎉',
+                        message: `Someone signed up using your referral code. You'll earn $5 when they get their first loan approved.`,
+                    },
+                });
+            }
         }
         const token = (0, jwt_1.signToken)({ userId: user.id, phone: user.phone });
         return res.json({
@@ -132,7 +161,7 @@ router.post('/verify-otp', async (req, res) => {
     }
 });
 // ─────────────────────────────────────────────
-// POST /api/auth/set-pin  (protected)
+// POST /api/auth/set-pin
 // ─────────────────────────────────────────────
 const setPinSchema = zod_1.z.object({
     pin: zod_1.z.string().length(4).regex(/^\d+$/, 'PIN must be digits'),
@@ -156,7 +185,7 @@ router.post('/set-pin', auth_1.requireAuth, async (req, res) => {
     }
 });
 // ─────────────────────────────────────────────
-// POST /api/auth/login-pin  (protected)
+// POST /api/auth/login-pin
 // ─────────────────────────────────────────────
 router.post('/login-pin', auth_1.requireAuth, async (req, res) => {
     try {
@@ -182,7 +211,7 @@ router.post('/login-pin', auth_1.requireAuth, async (req, res) => {
     }
 });
 // ─────────────────────────────────────────────
-// POST /api/auth/change-pin  (protected)
+// POST /api/auth/change-pin
 // ─────────────────────────────────────────────
 const changePinSchema = zod_1.z.object({
     oldPin: zod_1.z.string().length(4).regex(/^\d+$/),
