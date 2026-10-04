@@ -1,4 +1,4 @@
-// Prisma Schema — QuickCash Backend
+// Prisma Schema — Jobacks Backend
 
 generator client {
   provider = "prisma-client-js"
@@ -9,9 +9,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ─────────────────────────────────────────────
-// USERS
-// ─────────────────────────────────────────────
 model User {
   id                String         @id @default(cuid())
   phone             String         @unique
@@ -39,9 +36,6 @@ model User {
   @@index([referralCode])
 }
 
-// ─────────────────────────────────────────────
-// OTP
-// ─────────────────────────────────────────────
 model Otp {
   id        String   @id @default(cuid())
   phone     String
@@ -53,9 +47,6 @@ model Otp {
   @@index([phone])
 }
 
-// ─────────────────────────────────────────────
-// GUARANTORS
-// ─────────────────────────────────────────────
 model Guarantor {
   id           String    @id @default(cuid())
   userId       String
@@ -73,9 +64,6 @@ model Guarantor {
   @@index([userId])
 }
 
-// ─────────────────────────────────────────────
-// KYC
-// ─────────────────────────────────────────────
 model Kyc {
   id            String    @id @default(cuid())
   userId        String    @unique
@@ -90,9 +78,6 @@ model Kyc {
   updatedAt     DateTime  @updatedAt
 }
 
-// ─────────────────────────────────────────────
-// LOANS
-// ─────────────────────────────────────────────
 model Loan {
   id              String    @id @default(cuid())
   userId          String
@@ -111,14 +96,16 @@ model Loan {
   rejectedAt      DateTime?
   creditApplied   Float     @default(0)
 
+  // Penalty fields
+  lateFee         Float     @default(0)
+  daysLate        Int       @default(0)
+  lastPenaltyAt   DateTime?
+
   repayments      Repayment[]
 
   @@index([userId])
 }
 
-// ─────────────────────────────────────────────
-// REPAYMENTS
-// ─────────────────────────────────────────────
 model Repayment {
   id        String   @id @default(cuid())
   loanId    String
@@ -132,9 +119,6 @@ model Repayment {
   @@index([loanId])
 }
 
-// ─────────────────────────────────────────────
-// NOTIFICATIONS
-// ─────────────────────────────────────────────
 model Notification {
   id        String   @id @default(cuid())
   userId    String
@@ -150,9 +134,6 @@ model Notification {
   @@index([userId, read])
 }
 
-// ─────────────────────────────────────────────
-// SAVINGS
-// ─────────────────────────────────────────────
 model Savings {
   id        String    @id @default(cuid())
   userId    String    @unique
@@ -166,16 +147,13 @@ model Savings {
   transactions SavingsTransaction[]
 }
 
-// ─────────────────────────────────────────────
-// SAVINGS TRANSACTIONS
-// ─────────────────────────────────────────────
 model SavingsTransaction {
   id        String   @id @default(cuid())
   savingsId String
   savings   Savings  @relation(fields: [savingsId], references: [id], onDelete: Cascade)
-  type      String   // DEPOSIT, WITHDRAWAL
+  type      String
   amount    Float
-  method    String?  // MTN_MOMO, AIRTEL_MONEY, BANK
+  method    String?
   reference String?
   createdAt DateTime @default(now())
 
