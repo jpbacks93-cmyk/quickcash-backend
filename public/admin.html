@@ -4,6 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>QuickCash Admin</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -12,19 +13,15 @@
   }
   .hidden { display: none !important; }
 
-  /* Login */
   .login-wrap {
     display: flex; align-items: center; justify-content: center;
     min-height: 100vh; padding: 20px;
   }
   .login-card {
     background: #1e293b; border-radius: 16px; padding: 40px;
-    width: 100%; max-width: 380px;
-    border: 1px solid #334155;
+    width: 100%; max-width: 380px; border: 1px solid #334155;
   }
-  .login-card h1 {
-    font-size: 24px; font-weight: 700; margin-bottom: 8px; color: #fff;
-  }
+  .login-card h1 { font-size: 24px; font-weight: 700; margin-bottom: 8px; color: #fff; }
   .login-card p { font-size: 14px; color: #94a3b8; margin-bottom: 24px; }
   .login-card input {
     width: 100%; padding: 14px 16px; border-radius: 10px;
@@ -41,7 +38,6 @@
   .login-card button:disabled { background: #475569; cursor: not-allowed; }
   .error { color: #f87171; font-size: 13px; margin-top: 10px; }
 
-  /* Header */
   header {
     background: #1e293b; padding: 16px 24px;
     border-bottom: 1px solid #334155;
@@ -56,13 +52,12 @@
   }
   header button:hover { background: #334155; }
 
-  /* Layout */
   main { padding: 24px; max-width: 1500px; margin: 0 auto; }
   .tabs { display: flex; gap: 8px; margin-bottom: 24px; flex-wrap: wrap; }
   .tab {
     padding: 10px 18px; border-radius: 8px; border: 1px solid #334155;
     background: transparent; color: #cbd5e1; cursor: pointer;
-    font-size: 14px; font-weight: 500; position: relative;
+    font-size: 14px; font-weight: 500;
   }
   .tab.active { background: #6366f1; color: #fff; border-color: #6366f1; }
   .tab .badge {
@@ -72,7 +67,6 @@
     font-size: 11px; font-weight: 700;
   }
 
-  /* Stats grid */
   .stats-grid {
     display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     gap: 14px; margin-bottom: 24px;
@@ -92,7 +86,71 @@
   .stat-card.accent-purple .value { color: #a78bfa; }
   .stat-card.accent-red .value { color: #f87171; }
 
-  /* Search + filters */
+  .chart-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+    gap: 20px;
+    margin-bottom: 24px;
+  }
+  .chart-card {
+    background: #1e293b; border-radius: 12px; padding: 20px;
+    border: 1px solid #334155;
+  }
+  .chart-card h3 {
+    font-size: 14px; font-weight: 600; color: #cbd5e1;
+    margin-bottom: 16px; text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .chart-wrap { position: relative; height: 260px; }
+
+  .kpi-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px; margin-bottom: 24px;
+  }
+  .kpi-card {
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    border-radius: 12px; padding: 24px;
+    border: 1px solid #334155;
+    text-align: center;
+  }
+  .kpi-card .kpi-label {
+    font-size: 12px; color: #94a3b8; text-transform: uppercase;
+    letter-spacing: 0.5px; margin-bottom: 12px;
+  }
+  .kpi-card .kpi-value {
+    font-size: 36px; font-weight: 700; color: #fff;
+    margin-bottom: 6px;
+  }
+  .kpi-card .kpi-sub {
+    font-size: 12px; color: #64748b;
+  }
+  .kpi-card.green .kpi-value { color: #4ade80; }
+  .kpi-card.blue .kpi-value { color: #60a5fa; }
+  .kpi-card.orange .kpi-value { color: #fb923c; }
+
+  .funnel-row {
+    display: flex; align-items: center; margin-bottom: 12px;
+    font-size: 13px;
+  }
+  .funnel-label {
+    width: 100px; color: #94a3b8;
+  }
+  .funnel-bar {
+    flex: 1; height: 26px; background: #0f172a;
+    border-radius: 6px; overflow: hidden; margin: 0 12px;
+    position: relative;
+  }
+  .funnel-bar-fill {
+    height: 100%; background: linear-gradient(90deg, #6366f1, #4f46e5);
+    border-radius: 6px; transition: width 0.4s ease;
+  }
+  .funnel-bar-fill.green {
+    background: linear-gradient(90deg, #16a34a, #22c55e);
+  }
+  .funnel-value {
+    width: 60px; text-align: right; color: #fff; font-weight: 600;
+  }
+
   .toolbar {
     display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap;
     align-items: center;
@@ -100,8 +158,7 @@
   .toolbar input, .toolbar select {
     padding: 10px 14px; border-radius: 8px;
     border: 1px solid #334155; background: #1e293b;
-    color: #fff; font-size: 14px;
-    min-width: 200px;
+    color: #fff; font-size: 14px; min-width: 200px;
   }
   .toolbar input:focus, .toolbar select:focus { outline: none; border-color: #6366f1; }
   .toolbar button {
@@ -112,7 +169,6 @@
   .toolbar button.primary { background: #16a34a; color: #fff; border-color: #16a34a; }
   .toolbar button.primary:hover { background: #15803d; }
 
-  /* Table */
   .table-wrap {
     background: #1e293b; border-radius: 12px;
     border: 1px solid #334155; overflow-x: auto;
@@ -125,9 +181,7 @@
   }
   td { padding: 14px 16px; border-bottom: 1px solid #1e293b; color: #cbd5e1; }
   tr:hover td { background: #172033; }
-  tr.clickable { cursor: pointer; }
 
-  /* Badges */
   .badge {
     display: inline-block; padding: 4px 10px; border-radius: 12px;
     font-size: 11px; font-weight: 700; text-transform: uppercase;
@@ -139,11 +193,9 @@
   .badge.DEFAULTED { background: rgba(248,113,113,.15); color: #f87171; }
   .badge.VERIFIED { background: rgba(74,222,128,.15); color: #4ade80; }
 
-  /* Buttons */
   .btn {
     padding: 6px 12px; border-radius: 6px; border: none;
-    font-size: 12px; font-weight: 600; cursor: pointer;
-    margin-right: 6px;
+    font-size: 12px; font-weight: 600; cursor: pointer; margin-right: 6px;
   }
   .btn-approve { background: #16a34a; color: #fff; }
   .btn-approve:hover { background: #15803d; }
@@ -152,15 +204,9 @@
   .btn-view { background: #6366f1; color: #fff; }
   .btn-view:hover { background: #4f46e5; }
 
-  /* Empty + loading */
-  .empty {
-    text-align: center; padding: 40px; color: #64748b; font-size: 14px;
-  }
-  .loading {
-    text-align: center; padding: 40px; color: #94a3b8;
-  }
+  .empty { text-align: center; padding: 40px; color: #64748b; font-size: 14px; }
+  .loading { text-align: center; padding: 40px; color: #94a3b8; }
 
-  /* Modal */
   .modal-overlay {
     position: fixed; inset: 0; background: rgba(0,0,0,0.7);
     display: flex; align-items: center; justify-content: center;
@@ -185,8 +231,7 @@
 
   .detail-row {
     display: flex; justify-content: space-between;
-    padding: 10px 0; border-bottom: 1px solid #1e293b;
-    font-size: 14px;
+    padding: 10px 0; border-bottom: 1px solid #1e293b; font-size: 14px;
   }
   .detail-row:last-child { border-bottom: none; }
   .detail-row .k { color: #94a3b8; }
@@ -194,39 +239,33 @@
 
   .section-title {
     font-size: 12px; color: #94a3b8; text-transform: uppercase;
-    letter-spacing: 0.5px; margin: 20px 0 12px;
-    font-weight: 600;
+    letter-spacing: 0.5px; margin: 20px 0 12px; font-weight: 600;
   }
 
-  /* KYC image preview */
   .kyc-imgs {
     display: grid; grid-template-columns: repeat(3, 1fr);
     gap: 10px; margin-top: 8px;
   }
   .kyc-img-box {
     background: #0f172a; border-radius: 10px;
-    border: 1px solid #334155; padding: 8px;
-    text-align: center;
+    border: 1px solid #334155; padding: 8px; text-align: center;
   }
   .kyc-img-box .label {
     font-size: 11px; color: #94a3b8; margin-bottom: 6px;
   }
   .kyc-img-box img {
     width: 100%; border-radius: 6px;
-    aspect-ratio: 16/10; object-fit: cover;
-    background: #334155;
+    aspect-ratio: 16/10; object-fit: cover; background: #334155;
   }
   .kyc-img-box .placeholder {
     width: 100%; aspect-ratio: 16/10;
     display: flex; align-items: center; justify-content: center;
-    background: #334155; border-radius: 6px; color: #64748b;
-    font-size: 12px;
+    background: #334155; border-radius: 6px; color: #64748b; font-size: 12px;
   }
 </style>
 </head>
 <body>
 
-<!-- LOGIN -->
 <div id="login-screen" class="login-wrap">
   <div class="login-card">
     <h1>QuickCash Admin</h1>
@@ -237,7 +276,6 @@
   </div>
 </div>
 
-<!-- DASHBOARD -->
 <div id="dashboard" class="hidden">
   <header>
     <h1>QuickCash Admin</h1>
@@ -250,19 +288,46 @@
   <main>
     <div class="tabs">
       <button class="tab active" data-tab="overview">Overview</button>
+      <button class="tab" data-tab="analytics">Analytics</button>
       <button class="tab" data-tab="loans">Loans</button>
       <button class="tab" data-tab="kyc">KYC <span id="kyc-badge" class="badge hidden"></span></button>
       <button class="tab" data-tab="users">Users</button>
     </div>
 
-    <!-- Overview -->
     <div id="tab-overview">
       <div class="stats-grid" id="stats-grid">
         <div class="loading">Loading stats...</div>
       </div>
     </div>
 
-    <!-- Loans -->
+    <div id="tab-analytics" class="hidden">
+      <div class="kpi-grid" id="kpi-grid">
+        <div class="loading">Loading KPIs...</div>
+      </div>
+
+      <div class="chart-grid">
+        <div class="chart-card">
+          <h3>Daily Loans (Last 30 Days)</h3>
+          <div class="chart-wrap"><canvas id="chart-loans"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h3>Daily Disbursed Amount</h3>
+          <div class="chart-wrap"><canvas id="chart-disbursed"></canvas></div>
+        </div>
+      </div>
+
+      <div class="chart-grid">
+        <div class="chart-card">
+          <h3>Loan Status Breakdown</h3>
+          <div class="chart-wrap"><canvas id="chart-status"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h3>KYC Funnel</h3>
+          <div style="padding: 20px 0;" id="kyc-funnel"></div>
+        </div>
+      </div>
+    </div>
+
     <div id="tab-loans" class="hidden">
       <div class="toolbar">
         <select id="loans-status">
@@ -285,7 +350,6 @@
       </div>
     </div>
 
-    <!-- KYC -->
     <div id="tab-kyc" class="hidden">
       <div class="toolbar">
         <select id="kyc-status">
@@ -300,7 +364,6 @@
       </div>
     </div>
 
-    <!-- Users -->
     <div id="tab-users" class="hidden">
       <div class="toolbar">
         <input type="text" id="user-search" placeholder="Search by name, phone, or email..." />
@@ -313,13 +376,15 @@
   </main>
 </div>
 
-<!-- MODAL -->
 <div id="modal-container" class="hidden"></div>
 
 <script>
 const API = '/api/admin';
 let token = localStorage.getItem('admin_token');
 let kycPendingCount = 0;
+let chartLoans = null;
+let chartDisbursed = null;
+let chartStatus = null;
 
 function authHeaders() {
   return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token };
@@ -354,9 +419,6 @@ function fmtDate(s) {
   });
 }
 
-// ─────────────────────────────────────────────
-// LOGIN
-// ─────────────────────────────────────────────
 const loginScreen = document.getElementById('login-screen');
 const dashboard = document.getElementById('dashboard');
 const loginError = document.getElementById('login-error');
@@ -410,23 +472,18 @@ document.getElementById('password-input').addEventListener('keydown', e => {
 });
 document.getElementById('logout-btn').onclick = logout;
 
-// ─────────────────────────────────────────────
-// TABS
-// ─────────────────────────────────────────────
 document.querySelectorAll('.tab').forEach(tab => {
   tab.onclick = () => {
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
     tab.classList.add('active');
     const name = tab.dataset.tab;
-    ['overview', 'loans', 'kyc', 'users'].forEach(n => {
+    ['overview', 'analytics', 'loans', 'kyc', 'users'].forEach(n => {
       document.getElementById('tab-' + n).classList.toggle('hidden', n !== name);
     });
+    if (name === 'analytics') loadAnalytics();
   };
 });
 
-// ─────────────────────────────────────────────
-// STATS
-// ─────────────────────────────────────────────
 async function loadStats() {
   const grid = document.getElementById('stats-grid');
   try {
@@ -460,9 +517,132 @@ function updateKycBadge() {
   }
 }
 
-// ─────────────────────────────────────────────
-// LOANS
-// ─────────────────────────────────────────────
+async function loadAnalytics() {
+  try {
+    const data = await api('/analytics');
+
+    const kpiGrid = document.getElementById('kpi-grid');
+    kpiGrid.innerHTML = `
+      <div class="kpi-card green">
+        <div class="kpi-label">Collection Rate</div>
+        <div class="kpi-value">${data.collection.rate}%</div>
+        <div class="kpi-sub">${money(data.collection.totalCollected)} of ${money(data.collection.totalExpected)}</div>
+      </div>
+      <div class="kpi-card blue">
+        <div class="kpi-label">Total Collected</div>
+        <div class="kpi-value">${money(data.collection.totalCollected)}</div>
+        <div class="kpi-sub">All time repayments</div>
+      </div>
+      <div class="kpi-card orange">
+        <div class="kpi-label">Outstanding</div>
+        <div class="kpi-value">${money(data.collection.totalExpected - data.collection.totalCollected)}</div>
+        <div class="kpi-sub">Still to collect</div>
+      </div>
+    `;
+
+    const f = data.kycFunnel;
+    const pct1 = f.totalUsers > 0 ? 100 : 0;
+    const pct2 = f.totalUsers > 0 ? (f.submitted / f.totalUsers) * 100 : 0;
+    const pct3 = f.totalUsers > 0 ? (f.verified / f.totalUsers) * 100 : 0;
+    document.getElementById('kyc-funnel').innerHTML = `
+      <div class="funnel-row">
+        <div class="funnel-label">Total Users</div>
+        <div class="funnel-bar"><div class="funnel-bar-fill" style="width:${pct1}%"></div></div>
+        <div class="funnel-value">${f.totalUsers}</div>
+      </div>
+      <div class="funnel-row">
+        <div class="funnel-label">Submitted</div>
+        <div class="funnel-bar"><div class="funnel-bar-fill" style="width:${pct2}%"></div></div>
+        <div class="funnel-value">${f.submitted}</div>
+      </div>
+      <div class="funnel-row">
+        <div class="funnel-label">Verified</div>
+        <div class="funnel-bar"><div class="funnel-bar-fill green" style="width:${pct3}%"></div></div>
+        <div class="funnel-value">${f.verified}</div>
+      </div>
+    `;
+
+    Chart.defaults.color = '#94a3b8';
+    Chart.defaults.borderColor = '#334155';
+    Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+
+    if (chartLoans) chartLoans.destroy();
+    chartLoans = new Chart(document.getElementById('chart-loans'), {
+      type: 'line',
+      data: {
+        labels: data.daily.labels,
+        datasets: [{
+          label: 'Loans',
+          data: data.daily.loans,
+          borderColor: '#6366f1',
+          backgroundColor: 'rgba(99,102,241,0.15)',
+          tension: 0.35,
+          fill: true,
+          pointRadius: 3,
+          pointBackgroundColor: '#6366f1',
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { beginAtZero: true, ticks: { precision: 0 } },
+          x: { ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 10 } },
+        },
+      },
+    });
+
+    if (chartDisbursed) chartDisbursed.destroy();
+    chartDisbursed = new Chart(document.getElementById('chart-disbursed'), {
+      type: 'bar',
+      data: {
+        labels: data.daily.labels,
+        datasets: [{
+          label: 'Disbursed',
+          data: data.daily.disbursed,
+          backgroundColor: '#22c55e',
+          borderRadius: 4,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { beginAtZero: true, ticks: { callback: (v) => '$' + v } },
+          x: { ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 10 } },
+        },
+      },
+    });
+
+    const s = data.statusBreakdown;
+    if (chartStatus) chartStatus.destroy();
+    chartStatus = new Chart(document.getElementById('chart-status'), {
+      type: 'doughnut',
+      data: {
+        labels: ['Pending', 'Active', 'Paid', 'Rejected', 'Defaulted'],
+        datasets: [{
+          data: [s.PENDING, s.ACTIVE, s.PAID, s.REJECTED, s.DEFAULTED],
+          backgroundColor: ['#fb923c', '#4ade80', '#60a5fa', '#f87171', '#dc2626'],
+          borderWidth: 0,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'right', labels: { boxWidth: 12, padding: 12 } },
+        },
+        cutout: '60%',
+      },
+    });
+  } catch (e) {
+    console.error(e);
+    alert('Analytics load failed: ' + e.message);
+  }
+}
+
 async function loadLoans() {
   const wrap = document.getElementById('loans-table');
   wrap.innerHTML = '<div class="loading">Loading loans...</div>';
@@ -545,9 +725,6 @@ async function rejectLoan(id) {
   } catch (e) { alert('Error: ' + e.message); }
 }
 
-// ─────────────────────────────────────────────
-// KYC
-// ─────────────────────────────────────────────
 async function loadKyc() {
   const wrap = document.getElementById('kyc-table');
   wrap.innerHTML = '<div class="loading">Loading KYC...</div>';
@@ -617,14 +794,12 @@ async function rejectKyc(id) {
 function viewKyc(id) {
   const k = (window.__kycCache || []).find(x => x.id === id);
   if (!k) return;
-
   const img = (url, label) => {
     if (url && !url.startsWith('https://example.com')) {
       return `<div class="kyc-img-box"><div class="label">${label}</div><img src="${esc(url)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="placeholder" style="display:none">No image</div></div>`;
     }
     return `<div class="kyc-img-box"><div class="label">${label}</div><div class="placeholder">No image uploaded</div></div>`;
   };
-
   openModal(`
     <div class="modal-header">
       <h2>KYC Submission — ${esc(k.user?.name || k.user?.phone)}</h2>
@@ -635,7 +810,6 @@ function viewKyc(id) {
       <div class="detail-row"><span class="k">Document Type</span><span class="v">${esc(k.documentType)}</span></div>
       <div class="detail-row"><span class="k">Status</span><span class="v"><span class="badge ${k.status}">${k.status}</span></span></div>
       <div class="detail-row"><span class="k">Submitted</span><span class="v">${fmtDate(k.createdAt)}</span></div>
-
       <div class="section-title">Documents</div>
       <div class="kyc-imgs">
         ${img(k.frontImageUrl, 'Front')}
@@ -646,9 +820,6 @@ function viewKyc(id) {
   `);
 }
 
-// ─────────────────────────────────────────────
-// USERS
-// ─────────────────────────────────────────────
 async function loadUsers() {
   const wrap = document.getElementById('users-table');
   wrap.innerHTML = '<div class="loading">Loading users...</div>';
@@ -695,7 +866,6 @@ async function viewUser(id) {
   try {
     const data = await api('/users/' + id);
     const u = data.user;
-
     const loansHtml = u.loans.length === 0
       ? '<div class="empty" style="padding:16px">No loans yet</div>'
       : u.loans.map(l => `
@@ -704,7 +874,6 @@ async function viewUser(id) {
             <span class="v"><span class="badge ${l.status}">${l.status}</span></span>
           </div>
         `).join('');
-
     const guarantorsHtml = u.guarantors.length === 0
       ? '<div class="empty" style="padding:16px">No guarantors</div>'
       : u.guarantors.map(g => `
@@ -713,7 +882,6 @@ async function viewUser(id) {
             <span class="v"><span class="badge ${g.status === 'VERIFIED' ? 'VERIFIED' : 'PENDING'}">${g.status}</span></span>
           </div>
         `).join('');
-
     openModal(`
       <div class="modal-header">
         <h2>${esc(u.name || 'User')}</h2>
@@ -725,10 +893,8 @@ async function viewUser(id) {
         <div class="detail-row"><span class="k">KYC Status</span><span class="v"><span class="badge ${u.kycStatus}">${u.kycStatus}</span></span></div>
         <div class="detail-row"><span class="k">Credit Score</span><span class="v">${u.creditScore}</span></div>
         <div class="detail-row"><span class="k">Joined</span><span class="v">${fmtDate(u.createdAt)}</span></div>
-
         <div class="section-title">Loans (${u.loans.length})</div>
         ${loansHtml}
-
         <div class="section-title">Guarantors (${u.guarantors.length})</div>
         ${guarantorsHtml}
       </div>
@@ -738,9 +904,6 @@ async function viewUser(id) {
   }
 }
 
-// ─────────────────────────────────────────────
-// MODAL
-// ─────────────────────────────────────────────
 function openModal(contentHtml) {
   const c = document.getElementById('modal-container');
   c.innerHTML = `<div class="modal-overlay" onclick="if(event.target===this)closeModal()">
@@ -748,21 +911,21 @@ function openModal(contentHtml) {
   </div>`;
   c.classList.remove('hidden');
 }
-
 function closeModal() {
   document.getElementById('modal-container').classList.add('hidden');
   document.getElementById('modal-container').innerHTML = '';
 }
 
-// Refresh
 document.getElementById('refresh-btn').onclick = () => {
   loadStats();
   loadLoans();
   loadKyc();
   loadUsers();
+  if (!document.getElementById('tab-analytics').classList.contains('hidden')) {
+    loadAnalytics();
+  }
 };
 
-// Auto login
 if (token) showDashboard();
 </script>
 </body>
