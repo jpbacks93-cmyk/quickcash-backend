@@ -7,8 +7,11 @@ import { createNotification } from '../lib/notifications';
 
 const router = Router();
 
+// ─────────────────────────────────────────────
 // Login
+// ─────────────────────────────────────────────
 const loginSchema = z.object({ password: z.string().min(4) });
+
 router.post('/login', async (req, res) => {
   try {
     const { password } = loginSchema.parse(req.body);
@@ -27,7 +30,9 @@ router.post('/login', async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────
 // Stats
+// ─────────────────────────────────────────────
 router.get('/stats', requireAdmin, async (_req, res) => {
   try {
     const [
@@ -64,7 +69,114 @@ router.get('/stats', requireAdmin, async (_req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────
+// Analytics
+// ─────────────────────────────────────────────
+router.get('/analytics', requireAdmin, async (_req, res) => {
+  try {
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    const recentLoans = await prisma.loan.findMany({
+      where: { appliedAt: { gte: thirtyDaysAgo } },
+      select: {
+        id: true,
+        amount: true,
+        totalDue: true,
+        status: true,
+        appliedAt: true,
+        userId: true,
+      },
+    });
+
+    // Daily series (last 30 days)
+    const dailyLabels: string[] = [];
+    const dailyLoansCount: number[] = [];
+    const dailyDisbursed: number[] = [];
+
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+      const dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+
+      const dayLoans = recentLoans.filter(
+        (l) => l.appliedAt >= dayStart && l.appliedAt < dayEnd
+      );
+
+      const dayDisbursed = dayLoans
+        .filter((l) => ['ACTIVE', 'PAID'].includes(l.status))
+        .reduce((s, l) => s + l.amount, 0);
+
+      dailyLabels.push(`${d.getDate()}/${d.getMonth() + 1}`);
+      dailyLoansCount.push(dayLoans.length);
+      dailyDisbursed.push(Math.round(dayDisbursed * 100) / 100);
+    }
+
+    // Status breakdown
+    const statusCounts = {
+      PENDING: 0,
+      ACTIVE: 0,
+      PAID: 0,
+      REJECTED: 0,
+      DEFAULTED: 0,
+    };
+    for (const l of recentLoans) {
+      if (statusCounts[l.status as keyof typeof statusCounts] !== undefined) {
+        statusCounts[l.status as keyof typeof statusCounts]++;
+      }
+    }
+
+    // Collection rate
+    const allTimeAgg = await prisma.loan.aggregate({
+      where: { status: { in: ['ACTIVE', 'PAID'] } },
+      _sum: { totalDue: true, amount: true },
+    });
+    const repaidAgg = await prisma.repayment.aggregate({
+      where: { status: 'SUCCESSFUL' },
+      _sum: { amount: true },
+    });
+
+    const totalExpected = allTimeAgg._sum.totalDue || 0;
+    const totalCollected = repaidAgg._sum.amount || 0;
+    const collectionRate =
+      totalExpected > 0
+        ? Math.min(100, (totalCollected / totalExpected) * 100)
+        : 0;
+
+    // KYC funnel
+    const totalUsers = await prisma.user.count();
+    const kycSubmitted = await prisma.kyc.count();
+    const kycVerified = await prisma.user.count({
+      where: { kycStatus: 'VERIFIED' },
+    });
+
+    return res.json({
+      daily: {
+        labels: dailyLabels,
+        loans: dailyLoansCount,
+        disbursed: dailyDisbursed,
+      },
+      statusBreakdown: statusCounts,
+      collection: {
+        totalExpected: Math.round(totalExpected * 100) / 100,
+        totalCollected: Math.round(totalCollected * 100) / 100,
+        rate: Math.round(collectionRate * 10) / 10,
+      },
+      kycFunnel: {
+        totalUsers,
+        submitted: kycSubmitted,
+        verified: kycVerified,
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ─────────────────────────────────────────────
 // Users list + search
+// ─────────────────────────────────────────────
 router.get('/users', requireAdmin, async (req, res) => {
   try {
     const limit = Math.min(Number(req.query.limit) || 100, 500);
@@ -97,7 +209,9 @@ router.get('/users', requireAdmin, async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────
 // Single user detail
+// ─────────────────────────────────────────────
 router.get('/users/:id', requireAdmin, async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
@@ -122,7 +236,9 @@ router.get('/users/:id', requireAdmin, async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────
 // Loans list with filters
+// ─────────────────────────────────────────────
 router.get('/loans', requireAdmin, async (req, res) => {
   try {
     const status = req.query.status as string | undefined;
@@ -179,7 +295,9 @@ router.get('/loans', requireAdmin, async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────
 // KYC list
+// ─────────────────────────────────────────────
 router.get('/kyc', requireAdmin, async (req, res) => {
   try {
     const status = req.query.status as string | undefined;
@@ -201,7 +319,9 @@ router.get('/kyc', requireAdmin, async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────
 // KYC approve
+// ─────────────────────────────────────────────
 router.post('/kyc/:id/approve', requireAdmin, async (req, res) => {
   try {
     const kyc = await prisma.kyc.findUnique({ where: { id: req.params.id } });
@@ -233,8 +353,11 @@ router.post('/kyc/:id/approve', requireAdmin, async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────
 // KYC reject
+// ─────────────────────────────────────────────
 const rejectKycSchema = z.object({ reason: z.string().max(200).optional() });
+
 router.post('/kyc/:id/reject', requireAdmin, async (req, res) => {
   try {
     const { reason } = rejectKycSchema.parse(req.body || {});
@@ -301,7 +424,6 @@ router.post('/loans/:id/approve', requireAdmin, async (req: AdminRequest, res) =
 
     console.log(`[ADMIN] Approved loan ${loanId}`);
 
-    // Notify borrower
     await createNotification({
       userId: loan.userId,
       type: 'LOAN_APPROVED',
@@ -310,12 +432,11 @@ router.post('/loans/:id/approve', requireAdmin, async (req: AdminRequest, res) =
       metadata: { loanId: loan.id },
     });
 
-    // ─── Referral bonus trigger ─────────────
+    // Referral bonus trigger
     if (loan.user.referredById && !loan.user.referralBonusPaid) {
       const REFERRER_BONUS = 5;
       const REFEREE_BONUS = 5;
 
-      // Mark bonus as paid (prevents duplicate)
       await prisma.user.update({
         where: { id: loan.userId },
         data: {
@@ -324,16 +445,14 @@ router.post('/loans/:id/approve', requireAdmin, async (req: AdminRequest, res) =
         },
       });
 
-      // Credit referrer
       await prisma.user.update({
         where: { id: loan.user.referredById },
         data: { referralCredit: { increment: REFERRER_BONUS } },
       });
 
-      // Notify both
       await createNotification({
         userId: loan.userId,
-        type: 'GUARANTOR_VERIFIED', // reuse type
+        type: 'GUARANTOR_VERIFIED',
         title: 'Referral Bonus Received! 🎁',
         message: `You earned $${REFEREE_BONUS} credit for joining with a referral code.`,
       });
@@ -357,8 +476,11 @@ router.post('/loans/:id/approve', requireAdmin, async (req: AdminRequest, res) =
   }
 });
 
+// ─────────────────────────────────────────────
 // Reject loan
+// ─────────────────────────────────────────────
 const rejectSchema = z.object({ reason: z.string().max(200).optional() });
+
 router.post('/loans/:id/reject', requireAdmin, async (req, res) => {
   try {
     const loanId = req.params.id;
@@ -404,7 +526,9 @@ router.post('/loans/:id/reject', requireAdmin, async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────
 // CSV export
+// ─────────────────────────────────────────────
 router.get('/export/loans.csv', requireAdmin, async (req, res) => {
   try {
     const status = req.query.status as string | undefined;
