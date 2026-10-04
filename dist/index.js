@@ -23,7 +23,7 @@ app.use((0, cors_1.default)());
 app.use(express_1.default.json({ limit: '10mb' }));
 app.use(express_1.default.static(path_1.default.join(__dirname, '..', 'public')));
 app.get('/health', (_req, res) => {
-    res.json({ ok: true, service: 'quickcash-backend', time: new Date() });
+    res.json({ ok: true, service: 'jobacks-backend', time: new Date() });
 });
 app.get('/admin', (_req, res) => {
     res.sendFile(path_1.default.join(__dirname, '..', 'public', 'admin.html'));
@@ -41,7 +41,7 @@ app.use((_req, res) => {
     res.status(404).json({ error: 'Not found' });
 });
 app.listen(PORT, () => {
-    console.log(`🚀 Server running at http://localhost:${PORT}`);
+    console.log(`🚀 Jobacks server running at http://localhost:${PORT}`);
     console.log(`   Health: http://localhost:${PORT}/health`);
     console.log(`   Admin:  http://localhost:${PORT}/admin`);
 });

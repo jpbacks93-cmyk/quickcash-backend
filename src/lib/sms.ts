@@ -3,6 +3,7 @@ import AfricasTalking from 'africastalking';
 
 const AT_USERNAME = process.env.AT_USERNAME || '';
 const AT_API_KEY = process.env.AT_API_KEY || '';
+const AT_SENDER_ID = process.env.AT_SENDER_ID || '';
 
 let smsClient: any = null;
 
@@ -21,10 +22,6 @@ if (AT_USERNAME && AT_API_KEY) {
   console.log('[SMS] AT credentials missing — SMS will be skipped');
 }
 
-/**
- * Send an SMS to a phone number.
- * Returns { success, messageId?, error? }
- */
 export async function sendSms(
   phone: string,
   message: string
@@ -35,13 +32,12 @@ export async function sendSms(
   }
 
   try {
-     const result = await smsClient.send({
+    const result = await smsClient.send({
       to: [phone],
       message,
-      from: process.env.AT_SENDER_ID || undefined,
+      from: AT_SENDER_ID || undefined,
     });
 
-    // AT returns: { SMSMessageData: { Recipients: [ { status, messageId } ] } }
     const recipient = result?.SMSMessageData?.Recipients?.[0];
     if (recipient?.status === 'Success') {
       console.log(`[SMS] Sent to ${phone} | id: ${recipient.messageId}`);
@@ -56,10 +52,7 @@ export async function sendSms(
   }
 }
 
-/**
- * Send an OTP SMS with a standardized message.
- */
 export async function sendOtpSms(phone: string, code: string) {
-  const message = `Your QuickCash verification code is ${code}. It expires in 5 minutes. Do not share it.`;
+  const message = `Your Jobacks verification code is ${code}. It expires in 5 minutes. Do not share it.`;
   return sendSms(phone, message);
 }

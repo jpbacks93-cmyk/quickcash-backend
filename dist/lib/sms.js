@@ -8,6 +8,7 @@ exports.sendOtpSms = exports.sendSms = void 0;
 const africastalking_1 = __importDefault(require("africastalking"));
 const AT_USERNAME = process.env.AT_USERNAME || '';
 const AT_API_KEY = process.env.AT_API_KEY || '';
+const AT_SENDER_ID = process.env.AT_SENDER_ID || '';
 let smsClient = null;
 if (AT_USERNAME && AT_API_KEY) {
     try {
@@ -25,10 +26,6 @@ if (AT_USERNAME && AT_API_KEY) {
 else {
     console.log('[SMS] AT credentials missing — SMS will be skipped');
 }
-/**
- * Send an SMS to a phone number.
- * Returns { success, messageId?, error? }
- */
 async function sendSms(phone, message) {
     if (!smsClient) {
         console.log(`[SMS] SKIPPED (no client) → ${phone}: ${message}`);
@@ -38,9 +35,8 @@ async function sendSms(phone, message) {
         const result = await smsClient.send({
             to: [phone],
             message,
-            from: process.env.AT_SENDER_ID || undefined,
+            from: AT_SENDER_ID || undefined,
         });
-        // AT returns: { SMSMessageData: { Recipients: [ { status, messageId } ] } }
         const recipient = result?.SMSMessageData?.Recipients?.[0];
         if (recipient?.status === 'Success') {
             console.log(`[SMS] Sent to ${phone} | id: ${recipient.messageId}`);
@@ -55,11 +51,8 @@ async function sendSms(phone, message) {
     }
 }
 exports.sendSms = sendSms;
-/**
- * Send an OTP SMS with a standardized message.
- */
 async function sendOtpSms(phone, code) {
-    const message = `Your QuickCash verification code is ${code}. It expires in 5 minutes. Do not share it.`;
+    const message = `Your Jobacks verification code is ${code}. It expires in 5 minutes. Do not share it.`;
     return sendSms(phone, message);
 }
 exports.sendOtpSms = sendOtpSms;

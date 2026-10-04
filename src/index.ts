@@ -23,7 +23,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 app.get('/health', (_req, res) => {
-  res.json({ ok: true, service: 'quickcash-backend', time: new Date() });
+  res.json({ ok: true, service: 'jobacks-backend', time: new Date() });
 });
 
 app.get('/admin', (_req, res) => {
@@ -45,7 +45,7 @@ app.use((_req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 Server running at http://localhost:${PORT}`);
+  console.log(`🚀 Jobacks server running at http://localhost:${PORT}`);
   console.log(`   Health: http://localhost:${PORT}/health`);
   console.log(`   Admin:  http://localhost:${PORT}/admin`);
 });

@@ -1,0 +1,1 @@
+TRUNCATE "Notification", "SavingsTransaction", "Savings", "Repayment", "Loan", "Guarantor", "Kyc", "Otp", "User" CASCADE;

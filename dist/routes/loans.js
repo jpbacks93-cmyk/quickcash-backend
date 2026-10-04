@@ -6,13 +6,16 @@ const prisma_1 = require("../lib/prisma");
 const auth_1 = require("../middleware/auth");
 const notifications_1 = require("../lib/notifications");
 const router = (0, express_1.Router)();
+// ─────────────────────────────────────────────
+// Loan tiers — UGX (Ugandan Shillings)
+// ─────────────────────────────────────────────
 const INTEREST_RATES = {
     7: 0.08,
     14: 0.12,
     30: 0.15,
 };
-const MIN_AMOUNT = 50;
-const MAX_AMOUNT = 500;
+const MIN_AMOUNT = 50000; // UGX 50,000
+const MAX_AMOUNT = 1000000; // UGX 1,000,000
 // ─────────────────────────────────────────────
 // POST /api/loans/apply
 // ─────────────────────────────────────────────
@@ -42,9 +45,9 @@ router.post('/apply', auth_1.requireAuth, async (req, res) => {
         if (!user) {
             return res.status(404).json({ error: 'User not found' });
         }
-        if (amount > 100 && user.kycStatus !== 'VERIFIED') {
+        if (amount > 200000 && user.kycStatus !== 'VERIFIED') {
             return res.status(400).json({
-                error: 'KYC verification required for loans above $100',
+                error: 'KYC verification required for loans above UGX 200,000',
                 code: 'KYC_REQUIRED',
             });
         }
@@ -64,13 +67,12 @@ router.post('/apply', auth_1.requireAuth, async (req, res) => {
                 status: 'PENDING',
             },
         });
-        console.log(`[LOAN] New: $${amount} for ${durationDays} days by ${user.phone}`);
-        // Notify user
+        console.log(`[LOAN] New: UGX ${amount.toLocaleString()} for ${durationDays} days by ${user.phone}`);
         await (0, notifications_1.createNotification)({
             userId: user.id,
             type: 'LOAN_APPLIED',
             title: 'Application Received',
-            message: `Your loan application for $${amount.toFixed(2)} is being reviewed.`,
+            message: `Your loan application for UGX ${amount.toLocaleString()} is being reviewed.`,
             metadata: { loanId: loan.id },
         });
         return res.json({
@@ -175,9 +177,9 @@ router.post('/:id/repay', auth_1.requireAuth, async (req, res) => {
             .reduce((sum, r) => sum + r.amount, 0);
         const outstanding = loan.totalDue - totalRepaid;
         if (amount > outstanding + 0.01) {
-            return res
-                .status(400)
-                .json({ error: `Exceeds outstanding $${outstanding.toFixed(2)}` });
+            return res.status(400).json({
+                error: `Exceeds outstanding UGX ${outstanding.toLocaleString()}`,
+            });
         }
         const repayment = await prisma_1.prisma.repayment.create({
             data: { loanId: loan.id, amount, method, reference: reference || null },
@@ -194,22 +196,20 @@ router.post('/:id/repay', auth_1.requireAuth, async (req, res) => {
                 data: { creditScore: { increment: 20 } },
             });
             console.log(`[LOAN] ${loan.id} fully paid! +20 credit`);
-            // Notify: Loan fully paid
             await (0, notifications_1.createNotification)({
                 userId: req.user.userId,
                 type: 'LOAN_PAID',
                 title: 'Loan Fully Paid! 🎉',
-                message: "You've successfully repaid your loan. Your credit score has improved.",
+                message: `You've successfully repaid your loan. Your credit score has improved.`,
                 metadata: { loanId: loan.id },
             });
         }
         else {
-            // Notify: Partial repayment
             await (0, notifications_1.createNotification)({
                 userId: req.user.userId,
                 type: 'REPAYMENT_SUCCESS',
                 title: 'Payment Received',
-                message: `Your payment of $${amount.toFixed(2)} was successful. Remaining: $${Math.max(0, loan.totalDue - newTotalRepaid).toFixed(2)}.`,
+                message: `Your payment of UGX ${amount.toLocaleString()} was successful. Remaining: UGX ${Math.max(0, loan.totalDue - newTotalRepaid).toLocaleString()}.`,
                 metadata: { loanId: loan.id, amount },
             });
         }

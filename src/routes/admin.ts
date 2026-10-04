@@ -80,16 +80,10 @@ router.get('/analytics', requireAdmin, async (_req, res) => {
     const recentLoans = await prisma.loan.findMany({
       where: { appliedAt: { gte: thirtyDaysAgo } },
       select: {
-        id: true,
-        amount: true,
-        totalDue: true,
-        status: true,
-        appliedAt: true,
-        userId: true,
+        id: true, amount: true, totalDue: true, status: true, appliedAt: true, userId: true,
       },
     });
 
-    // Daily series (last 30 days)
     const dailyLabels: string[] = [];
     const dailyLoansCount: number[] = [];
     const dailyDisbursed: number[] = [];
@@ -112,13 +106,8 @@ router.get('/analytics', requireAdmin, async (_req, res) => {
       dailyDisbursed.push(Math.round(dayDisbursed * 100) / 100);
     }
 
-    // Status breakdown
     const statusCounts = {
-      PENDING: 0,
-      ACTIVE: 0,
-      PAID: 0,
-      REJECTED: 0,
-      DEFAULTED: 0,
+      PENDING: 0, ACTIVE: 0, PAID: 0, REJECTED: 0, DEFAULTED: 0,
     };
     for (const l of recentLoans) {
       if (statusCounts[l.status as keyof typeof statusCounts] !== undefined) {
@@ -126,7 +115,6 @@ router.get('/analytics', requireAdmin, async (_req, res) => {
       }
     }
 
-    // Collection rate
     const allTimeAgg = await prisma.loan.aggregate({
       where: { status: { in: ['ACTIVE', 'PAID'] } },
       _sum: { totalDue: true, amount: true },
@@ -143,7 +131,6 @@ router.get('/analytics', requireAdmin, async (_req, res) => {
         ? Math.min(100, (totalCollected / totalExpected) * 100)
         : 0;
 
-    // KYC funnel
     const totalUsers = await prisma.user.count();
     const kycSubmitted = await prisma.kyc.count();
     const kycVerified = await prisma.user.count({
@@ -162,11 +149,7 @@ router.get('/analytics', requireAdmin, async (_req, res) => {
         totalCollected: Math.round(totalCollected * 100) / 100,
         rate: Math.round(collectionRate * 10) / 10,
       },
-      kycFunnel: {
-        totalUsers,
-        submitted: kycSubmitted,
-        verified: kycVerified,
-      },
+      kycFunnel: { totalUsers, submitted: kycSubmitted, verified: kycVerified },
     });
   } catch (err) {
     console.error(err);
@@ -307,9 +290,7 @@ router.get('/kyc', requireAdmin, async (req, res) => {
     const submissions = await prisma.kyc.findMany({
       where,
       orderBy: { createdAt: 'desc' },
-      include: {
-        user: { select: { id: true, phone: true, name: true } },
-      },
+      include: { user: { select: { id: true, phone: true, name: true } } },
     });
 
     return res.json({ submissions });
@@ -357,7 +338,6 @@ router.post('/kyc/:id/approve', requireAdmin, async (req, res) => {
 // KYC reject
 // ─────────────────────────────────────────────
 const rejectKycSchema = z.object({ reason: z.string().max(200).optional() });
-
 router.post('/kyc/:id/reject', requireAdmin, async (req, res) => {
   try {
     const { reason } = rejectKycSchema.parse(req.body || {});
@@ -428,14 +408,14 @@ router.post('/loans/:id/approve', requireAdmin, async (req: AdminRequest, res) =
       userId: loan.userId,
       type: 'LOAN_APPROVED',
       title: 'Loan Approved! 🎉',
-      message: `Your loan of $${loan.amount.toFixed(2)} has been approved. Total due: $${loan.totalDue.toFixed(2)}.`,
+      message: `Your loan of UGX ${loan.amount.toLocaleString()} has been approved. Total due: UGX ${loan.totalDue.toLocaleString()}.`,
       metadata: { loanId: loan.id },
     });
 
-    // Referral bonus trigger
+    // Referral bonus
     if (loan.user.referredById && !loan.user.referralBonusPaid) {
-      const REFERRER_BONUS = 5;
-      const REFEREE_BONUS = 5;
+      const REFERRER_BONUS = 20000;
+      const REFEREE_BONUS = 20000;
 
       await prisma.user.update({
         where: { id: loan.userId },
@@ -454,18 +434,18 @@ router.post('/loans/:id/approve', requireAdmin, async (req: AdminRequest, res) =
         userId: loan.userId,
         type: 'GUARANTOR_VERIFIED',
         title: 'Referral Bonus Received! 🎁',
-        message: `You earned $${REFEREE_BONUS} credit for joining with a referral code.`,
+        message: `You earned UGX ${REFEREE_BONUS.toLocaleString()} credit for joining with a referral code.`,
       });
 
       await createNotification({
         userId: loan.user.referredById,
         type: 'GUARANTOR_VERIFIED',
         title: 'Referral Bonus Earned! 🎉',
-        message: `You earned $${REFERRER_BONUS} credit because someone you referred got approved.`,
+        message: `You earned UGX ${REFERRER_BONUS.toLocaleString()} credit because someone you referred got approved.`,
       });
 
       console.log(
-        `[REFERRAL] Bonus paid: referrer ${loan.user.referredById} +$${REFERRER_BONUS}, referee ${loan.userId} +$${REFEREE_BONUS}`
+        `[REFERRAL] Bonus paid: referrer ${loan.user.referredById} +UGX ${REFERRER_BONUS}, referee ${loan.userId} +UGX ${REFEREE_BONUS}`
       );
     }
 
@@ -480,7 +460,6 @@ router.post('/loans/:id/approve', requireAdmin, async (req: AdminRequest, res) =
 // Reject loan
 // ─────────────────────────────────────────────
 const rejectSchema = z.object({ reason: z.string().max(200).optional() });
-
 router.post('/loans/:id/reject', requireAdmin, async (req, res) => {
   try {
     const loanId = req.params.id;
@@ -545,7 +524,7 @@ router.get('/export/loans.csv', requireAdmin, async (req, res) => {
     });
 
     const header =
-      'ID,Phone,Name,Amount,Interest Rate,Total Due,Repaid,Outstanding,Status,Duration (days),Applied At\n';
+      'ID,Phone,Name,Amount (UGX),Interest Rate,Total Due (UGX),Repaid (UGX),Outstanding (UGX),Status,Duration (days),Applied At\n';
 
     const rows = loans.map((l) => {
       const repaid = l.repayments
@@ -573,7 +552,7 @@ router.get('/export/loans.csv', requireAdmin, async (req, res) => {
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader(
       'Content-Disposition',
-      `attachment; filename="quickcash-loans-${Date.now()}.csv"`
+      `attachment; filename="jobacks-loans-${Date.now()}.csv"`
     );
 
     return res.send(csv);
