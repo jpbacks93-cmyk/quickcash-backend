@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { signToken } from '../lib/jwt';
 import { requireAdmin, AdminRequest } from '../middleware/adminAuth';
 import { createNotification } from '../lib/notifications';
+import { runPenaltyCheck } from '../lib/penalty';
 
 const router = Router();
 
@@ -561,5 +562,18 @@ router.get('/export/loans.csv', requireAdmin, async (req, res) => {
     return res.status(500).json({ error: 'Server error' });
   }
 });
-
+// ─────────────────────────────────────────────
+// POST /api/admin/run-penalties
+// Trigger penalty calculation manually
+// ─────────────────────────────────────────────
+router.post('/run-penalties', requireAdmin, async (_req, res) => {
+  try {
+    console.log('[ADMIN] Manual penalty check triggered');
+    const result = await runPenaltyCheck();
+    return res.json({ success: true, ...result });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
 export default router;

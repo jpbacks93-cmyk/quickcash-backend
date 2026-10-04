@@ -6,6 +6,7 @@ const prisma_1 = require("../lib/prisma");
 const jwt_1 = require("../lib/jwt");
 const adminAuth_1 = require("../middleware/adminAuth");
 const notifications_1 = require("../lib/notifications");
+const penalty_1 = require("../lib/penalty");
 const router = (0, express_1.Router)();
 // ─────────────────────────────────────────────
 // Login
@@ -488,6 +489,21 @@ router.get('/export/loans.csv', adminAuth_1.requireAdmin, async (req, res) => {
         res.setHeader('Content-Type', 'text/csv');
         res.setHeader('Content-Disposition', `attachment; filename="jobacks-loans-${Date.now()}.csv"`);
         return res.send(csv);
+    }
+    catch (err) {
+        console.error(err);
+        return res.status(500).json({ error: 'Server error' });
+    }
+});
+// ─────────────────────────────────────────────
+// POST /api/admin/run-penalties
+// Trigger penalty calculation manually
+// ─────────────────────────────────────────────
+router.post('/run-penalties', adminAuth_1.requireAdmin, async (_req, res) => {
+    try {
+        console.log('[ADMIN] Manual penalty check triggered');
+        const result = await (0, penalty_1.runPenaltyCheck)();
+        return res.json({ success: true, ...result });
     }
     catch (err) {
         console.error(err);
