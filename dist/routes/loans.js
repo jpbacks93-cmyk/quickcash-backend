@@ -101,6 +101,7 @@ router.post('/apply', auth_1.requireAuth, async (req, res) => {
 });
 // ─────────────────────────────────────────────
 // GET /api/loans
+// FIX: progress uses totalOwed, capped at 100%
 // ─────────────────────────────────────────────
 router.get('/', auth_1.requireAuth, async (req, res) => {
     try {
@@ -113,10 +114,20 @@ router.get('/', auth_1.requireAuth, async (req, res) => {
             const totalRepaid = loan.repayments
                 .filter((r) => r.status === 'SUCCESSFUL')
                 .reduce((sum, r) => sum + r.amount, 0);
+            // Total owed = base total due + any late fee
             const totalOwed = loan.totalDue + (loan.lateFee || 0);
             const outstanding = Math.max(0, totalOwed - totalRepaid);
-            const progress = totalOwed > 0 ? totalRepaid / totalOwed : 0;
-            return { ...loan, totalRepaid, outstanding, progress, totalOwed };
+            // Progress is capped at 100% so over-payments don't break the UI
+            const progress = totalOwed > 0
+                ? Math.min(1.0, totalRepaid / totalOwed)
+                : 0;
+            return {
+                ...loan,
+                totalRepaid,
+                outstanding,
+                progress,
+                totalOwed,
+            };
         });
         return res.json({ loans: enriched });
     }
@@ -141,8 +152,11 @@ router.get('/:id', auth_1.requireAuth, async (req, res) => {
             .reduce((sum, r) => sum + r.amount, 0);
         const totalOwed = loan.totalDue + (loan.lateFee || 0);
         const outstanding = Math.max(0, totalOwed - totalRepaid);
+        const progress = totalOwed > 0
+            ? Math.min(1.0, totalRepaid / totalOwed)
+            : 0;
         return res.json({
-            loan: { ...loan, totalRepaid, outstanding, totalOwed },
+            loan: { ...loan, totalRepaid, outstanding, totalOwed, progress },
         });
     }
     catch (err) {
@@ -152,6 +166,7 @@ router.get('/:id', auth_1.requireAuth, async (req, res) => {
 });
 // ─────────────────────────────────────────────
 // POST /api/loans/:id/repay
+// FIX: tolerant isFullyPaid check + self-heal status
 // ─────────────────────────────────────────────
 const repaySchema = zod_1.z.object({
     amount: zod_1.z.number().positive(),
@@ -167,8 +182,9 @@ router.post('/:id/repay', auth_1.requireAuth, async (req, res) => {
         });
         if (!loan)
             return res.status(404).json({ error: 'Loan not found' });
-        if (loan.status === 'PAID')
+        if (loan.status === 'PAID') {
             return res.status(400).json({ error: 'Already paid' });
+        }
         if (loan.status === 'PENDING' || loan.status === 'REJECTED') {
             return res.status(400).json({ error: 'Loan not disbursed yet' });
         }
@@ -177,6 +193,20 @@ router.post('/:id/repay', auth_1.requireAuth, async (req, res) => {
             .reduce((sum, r) => sum + r.amount, 0);
         const totalOwed = loan.totalDue + (loan.lateFee || 0);
         const outstanding = totalOwed - totalRepaid;
+        // If already overpaid, auto-heal status and return early
+        if (outstanding <= 0.01) {
+            await prisma_1.prisma.loan.update({
+                where: { id: loan.id },
+                data: { status: 'PAID' },
+            });
+            console.log(`[LOAN] ${loan.id} was overpaid — auto-marked PAID`);
+            return res.json({
+                success: true,
+                message: 'Loan already fully paid',
+                loanStatus: 'PAID',
+                newOutstanding: 0,
+            });
+        }
         if (amount > outstanding + 0.01) {
             return res.status(400).json({
                 error: `Exceeds outstanding UGX ${outstanding.toLocaleString()}`,
@@ -186,7 +216,15 @@ router.post('/:id/repay', auth_1.requireAuth, async (req, res) => {
             data: { loanId: loan.id, amount, method, reference: reference || null },
         });
         const newTotalRepaid = totalRepaid + amount;
-        const isFullyPaid = newTotalRepaid >= totalOwed - 0.01;
+        const newOutstanding = Math.max(0, totalOwed - newTotalRepaid);
+        // Tolerant full-paid detection:
+        // PAID if user covered the total owed (base + late fee) OR
+        // PAID if user covered the base totalDue (in case late fee was
+        // inflated after they paid) OR
+        // PAID if remaining < 1 UGX (rounding).
+        const isFullyPaid = newTotalRepaid >= totalOwed - 0.01 ||
+            newTotalRepaid >= loan.totalDue - 0.01 ||
+            newOutstanding <= 0.01;
         if (isFullyPaid) {
             await prisma_1.prisma.loan.update({
                 where: { id: loan.id },
@@ -205,19 +243,28 @@ router.post('/:id/repay', auth_1.requireAuth, async (req, res) => {
                 metadata: { loanId: loan.id },
             });
             // SMS: fully paid
-            await (0, sms_1.sendLoanPaidSms)(loan.user.phone);
+            try {
+                await (0, sms_1.sendLoanPaidSms)(loan.user.phone);
+            }
+            catch (smsErr) {
+                console.error('[SMS] Failed on loan paid:', smsErr);
+            }
         }
         else {
-            const remaining = Math.max(0, totalOwed - newTotalRepaid);
             await (0, notifications_1.createNotification)({
                 userId: req.user.userId,
                 type: 'REPAYMENT_SUCCESS',
                 title: 'Payment Received',
-                message: `Your payment of UGX ${amount.toLocaleString()} was successful. Remaining: UGX ${remaining.toLocaleString()}.`,
+                message: `Your payment of UGX ${amount.toLocaleString()} was successful. Remaining: UGX ${newOutstanding.toLocaleString()}.`,
                 metadata: { loanId: loan.id, amount },
             });
-            // SMS: partial payment
-            await (0, sms_1.sendRepaymentSms)(loan.user.phone, amount, remaining);
+            // SMS: partial
+            try {
+                await (0, sms_1.sendRepaymentSms)(loan.user.phone, amount, newOutstanding);
+            }
+            catch (smsErr) {
+                console.error('[SMS] Failed on repayment:', smsErr);
+            }
         }
         return res.json({
             success: true,
@@ -229,7 +276,7 @@ router.post('/:id/repay', auth_1.requireAuth, async (req, res) => {
                 createdAt: repayment.createdAt,
             },
             loanStatus: isFullyPaid ? 'PAID' : loan.status,
-            newOutstanding: Math.max(0, totalOwed - newTotalRepaid),
+            newOutstanding,
         });
     }
     catch (err) {
