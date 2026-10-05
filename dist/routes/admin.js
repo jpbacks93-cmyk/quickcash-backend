@@ -342,7 +342,7 @@ router.post('/kyc/:id/reject', adminAuth_1.requireAdmin, async (req, res) => {
     }
 });
 // ─────────────────────────────────────────────
-// Approve loan + trigger referral bonus + SMS
+// Approve loan + referral bonus + SMS
 // ─────────────────────────────────────────────
 router.post('/loans/:id/approve', adminAuth_1.requireAdmin, async (req, res) => {
     try {
@@ -372,12 +372,17 @@ router.post('/loans/:id/approve', adminAuth_1.requireAdmin, async (req, res) => 
             metadata: { loanId: loan.id },
         });
         // SMS: loan approved
-        await (0, sms_1.sendLoanApprovedSms)(loan.user.phone, loan.amount, loan.totalDue, dueDate);
+        try {
+            await (0, sms_1.sendLoanApprovedSms)(loan.user.phone, loan.amount, loan.totalDue, dueDate);
+        }
+        catch (e) {
+            console.error('[SMS] Approved failed:', e);
+        }
         // Referral bonus
         if (loan.user.referredById && !loan.user.referralBonusPaid) {
             const REFERRER_BONUS = 20000;
             const REFEREE_BONUS = 20000;
-            const updatedReferee = await prisma_1.prisma.user.update({
+            await prisma_1.prisma.user.update({
                 where: { id: loan.userId },
                 data: {
                     referralBonusPaid: true,
@@ -400,8 +405,12 @@ router.post('/loans/:id/approve', adminAuth_1.requireAdmin, async (req, res) => 
                 title: 'Referral Bonus Earned! 🎉',
                 message: `You earned UGX ${REFERRER_BONUS.toLocaleString()} credit because someone you referred got approved.`,
             });
-            // SMS: referrer bonus
-            await (0, sms_1.sendReferralBonusSms)(updatedReferrer.phone, REFERRER_BONUS, updatedReferrer.referralCredit);
+            try {
+                await (0, sms_1.sendReferralBonusSms)(updatedReferrer.phone, REFERRER_BONUS, updatedReferrer.referralCredit);
+            }
+            catch (e) {
+                console.error('[SMS] Referral bonus failed:', e);
+            }
             console.log(`[REFERRAL] Bonus paid: referrer ${loan.user.referredById} +UGX ${REFERRER_BONUS}, referee ${loan.userId} +UGX ${REFEREE_BONUS}`);
         }
         return res.json({ success: true, loan: updated });
@@ -447,8 +456,12 @@ router.post('/loans/:id/reject', adminAuth_1.requireAdmin, async (req, res) => {
             message: rejectionReason,
             metadata: { loanId: loan.id },
         });
-        // SMS: loan rejected
-        await (0, sms_1.sendLoanRejectedSms)(loan.user.phone, rejectionReason);
+        try {
+            await (0, sms_1.sendLoanRejectedSms)(loan.user.phone, rejectionReason);
+        }
+        catch (e) {
+            console.error('[SMS] Rejected failed:', e);
+        }
         return res.json({ success: true, loan: updated });
     }
     catch (err) {
@@ -514,6 +527,261 @@ router.post('/run-penalties', adminAuth_1.requireAdmin, async (_req, res) => {
         console.log('[ADMIN] Manual penalty check triggered');
         const result = await (0, penalty_1.runPenaltyCheck)();
         return res.json({ success: true, ...result });
+    }
+    catch (err) {
+        console.error(err);
+        return res.status(500).json({ error: 'Server error' });
+    }
+});
+// ─────────────────────────────────────────────
+// ADVANCED: Aging buckets
+// ─────────────────────────────────────────────
+router.get('/advanced/aging', adminAuth_1.requireAdmin, async (_req, res) => {
+    try {
+        const now = new Date();
+        const activeLoans = await prisma_1.prisma.loan.findMany({
+            where: { status: { in: ['ACTIVE', 'DEFAULTED'] } },
+            include: {
+                repayments: { select: { amount: true, status: true } },
+            },
+        });
+        const buckets = {
+            current: { count: 0, amount: 0 }, // 0-30 days
+            days30to60: { count: 0, amount: 0 }, // 31-60 days
+            days60to90: { count: 0, amount: 0 }, // 61-90 days
+            over90: { count: 0, amount: 0 }, // 90+ days
+        };
+        for (const loan of activeLoans) {
+            const totalRepaid = loan.repayments
+                .filter((r) => r.status === 'SUCCESSFUL')
+                .reduce((s, r) => s + r.amount, 0);
+            const totalOwed = loan.totalDue + (loan.lateFee || 0);
+            const outstanding = Math.max(0, totalOwed - totalRepaid);
+            const daysLate = loan.dueDate
+                ? Math.max(0, Math.floor((now.getTime() - loan.dueDate.getTime()) / (24 * 60 * 60 * 1000)))
+                : 0;
+            if (daysLate <= 30) {
+                buckets.current.count++;
+                buckets.current.amount += outstanding;
+            }
+            else if (daysLate <= 60) {
+                buckets.days30to60.count++;
+                buckets.days30to60.amount += outstanding;
+            }
+            else if (daysLate <= 90) {
+                buckets.days60to90.count++;
+                buckets.days60to90.amount += outstanding;
+            }
+            else {
+                buckets.over90.count++;
+                buckets.over90.amount += outstanding;
+            }
+        }
+        return res.json({ buckets });
+    }
+    catch (err) {
+        console.error(err);
+        return res.status(500).json({ error: 'Server error' });
+    }
+});
+// ─────────────────────────────────────────────
+// ADVANCED: Defaulter list (loans 60+ days overdue)
+// ─────────────────────────────────────────────
+router.get('/advanced/defaulters', adminAuth_1.requireAdmin, async (_req, res) => {
+    try {
+        const now = new Date();
+        const sixtyDaysAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
+        const defaulters = await prisma_1.prisma.loan.findMany({
+            where: {
+                status: { in: ['ACTIVE', 'DEFAULTED'] },
+                dueDate: { lt: sixtyDaysAgo },
+            },
+            include: {
+                user: { select: { id: true, phone: true, name: true } },
+                repayments: { select: { amount: true, status: true } },
+            },
+            orderBy: { dueDate: 'asc' },
+        });
+        const enriched = defaulters.map((loan) => {
+            const totalRepaid = loan.repayments
+                .filter((r) => r.status === 'SUCCESSFUL')
+                .reduce((s, r) => s + r.amount, 0);
+            const totalOwed = loan.totalDue + (loan.lateFee || 0);
+            const outstanding = Math.max(0, totalOwed - totalRepaid);
+            const daysLate = loan.dueDate
+                ? Math.floor((now.getTime() - loan.dueDate.getTime()) / (24 * 60 * 60 * 1000))
+                : 0;
+            return {
+                id: loan.id,
+                user: loan.user,
+                amount: loan.amount,
+                totalOwed,
+                outstanding,
+                lateFee: loan.lateFee,
+                daysLate,
+                status: loan.status,
+                dueDate: loan.dueDate,
+            };
+        });
+        return res.json({ defaulters: enriched });
+    }
+    catch (err) {
+        console.error(err);
+        return res.status(500).json({ error: 'Server error' });
+    }
+});
+// ─────────────────────────────────────────────
+// ADVANCED: Top borrowers
+// ─────────────────────────────────────────────
+router.get('/advanced/top-borrowers', adminAuth_1.requireAdmin, async (_req, res) => {
+    try {
+        const users = await prisma_1.prisma.user.findMany({
+            select: {
+                id: true,
+                phone: true,
+                name: true,
+                creditScore: true,
+                loans: {
+                    select: {
+                        amount: true,
+                        status: true,
+                        repayments: {
+                            select: { amount: true, status: true },
+                        },
+                    },
+                },
+            },
+        });
+        const enriched = users
+            .map((u) => {
+            const totalLoans = u.loans.length;
+            const totalBorrowed = u.loans.reduce((s, l) => s + l.amount, 0);
+            const paidLoans = u.loans.filter((l) => l.status === 'PAID').length;
+            const activeLoans = u.loans.filter((l) => l.status === 'ACTIVE').length;
+            const defaultedLoans = u.loans.filter((l) => l.status === 'DEFAULTED').length;
+            const onTimeRate = totalLoans > 0 ? Math.round((paidLoans / totalLoans) * 100) : 0;
+            return {
+                id: u.id,
+                phone: u.phone,
+                name: u.name,
+                creditScore: u.creditScore,
+                totalLoans,
+                totalBorrowed,
+                paidLoans,
+                activeLoans,
+                defaultedLoans,
+                onTimeRate,
+            };
+        })
+            .filter((u) => u.totalLoans > 0)
+            .sort((a, b) => b.totalBorrowed - a.totalBorrowed)
+            .slice(0, 20);
+        return res.json({ borrowers: enriched });
+    }
+    catch (err) {
+        console.error(err);
+        return res.status(500).json({ error: 'Server error' });
+    }
+});
+// ─────────────────────────────────────────────
+// ADVANCED: Bulk SMS to overdue users
+// ─────────────────────────────────────────────
+const bulkSmsSchema = zod_1.z.object({
+    target: zod_1.z.enum(['overdue', 'defaulters', 'all']),
+    message: zod_1.z.string().min(5).max(300),
+});
+router.post('/advanced/bulk-sms', adminAuth_1.requireAdmin, async (req, res) => {
+    try {
+        const { target, message } = bulkSmsSchema.parse(req.body);
+        const now = new Date();
+        let users = [];
+        if (target === 'overdue') {
+            // Active loans past due
+            const loans = await prisma_1.prisma.loan.findMany({
+                where: { status: 'ACTIVE', dueDate: { lt: now } },
+                include: { user: { select: { phone: true, name: true } } },
+            });
+            const seen = new Set();
+            for (const l of loans) {
+                if (!seen.has(l.user.phone)) {
+                    seen.add(l.user.phone);
+                    users.push(l.user);
+                }
+            }
+        }
+        else if (target === 'defaulters') {
+            const sixtyDaysAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
+            const loans = await prisma_1.prisma.loan.findMany({
+                where: {
+                    status: { in: ['ACTIVE', 'DEFAULTED'] },
+                    dueDate: { lt: sixtyDaysAgo },
+                },
+                include: { user: { select: { phone: true, name: true } } },
+            });
+            const seen = new Set();
+            for (const l of loans) {
+                if (!seen.has(l.user.phone)) {
+                    seen.add(l.user.phone);
+                    users.push(l.user);
+                }
+            }
+        }
+        else {
+            users = await prisma_1.prisma.user.findMany({
+                select: { phone: true, name: true },
+            });
+        }
+        let sent = 0;
+        let failed = 0;
+        for (const u of users) {
+            const personalized = message.replace(/{name}/g, u.name || 'Customer');
+            const result = await (0, sms_1.sendSms)(u.phone, personalized);
+            if (result.success)
+                sent++;
+            else
+                failed++;
+        }
+        console.log(`[ADMIN] Bulk SMS: ${sent} sent, ${failed} failed, target: ${target}`);
+        return res.json({
+            success: true,
+            recipients: users.length,
+            sent,
+            failed,
+        });
+    }
+    catch (err) {
+        if (err instanceof zod_1.z.ZodError) {
+            return res.status(400).json({ error: 'Invalid input' });
+        }
+        console.error(err);
+        return res.status(500).json({ error: 'Server error' });
+    }
+});
+// ─────────────────────────────────────────────
+// ADVANCED: Daily summary snapshot
+// ─────────────────────────────────────────────
+router.get('/advanced/daily-summary', adminAuth_1.requireAdmin, async (_req, res) => {
+    try {
+        const now = new Date();
+        const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const [newLoansToday, repaymentsToday, newUsersToday, overdueCount, pendingKyc,] = await Promise.all([
+            prisma_1.prisma.loan.count({ where: { appliedAt: { gte: startOfDay } } }),
+            prisma_1.prisma.repayment.aggregate({
+                where: { createdAt: { gte: startOfDay }, status: 'SUCCESSFUL' },
+                _sum: { amount: true },
+            }),
+            prisma_1.prisma.user.count({ where: { createdAt: { gte: startOfDay } } }),
+            prisma_1.prisma.loan.count({ where: { status: 'ACTIVE', dueDate: { lt: now } } }),
+            prisma_1.prisma.kyc.count({ where: { status: 'PENDING' } }),
+        ]);
+        return res.json({
+            date: startOfDay.toISOString(),
+            newLoansToday,
+            collectedToday: repaymentsToday._sum.amount || 0,
+            newUsersToday,
+            overdueCount,
+            pendingKyc,
+        });
     }
     catch (err) {
         console.error(err);
