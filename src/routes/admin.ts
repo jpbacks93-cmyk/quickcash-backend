@@ -4,6 +4,11 @@ import { prisma } from '../lib/prisma';
 import { signToken } from '../lib/jwt';
 import { requireAdmin, AdminRequest } from '../middleware/adminAuth';
 import { createNotification } from '../lib/notifications';
+import {
+  sendLoanApprovedSms,
+  sendLoanRejectedSms,
+  sendReferralBonusSms,
+} from '../lib/sms';
 import { runPenaltyCheck } from '../lib/penalty';
 
 const router = Router();
@@ -265,10 +270,11 @@ router.get('/loans', requireAdmin, async (req, res) => {
       const totalRepaid = loan.repayments
         .filter((r) => r.status === 'SUCCESSFUL')
         .reduce((sum, r) => sum + r.amount, 0);
+      const totalOwed = loan.totalDue + (loan.lateFee || 0);
       return {
         ...loan,
         totalRepaid,
-        outstanding: Math.max(0, loan.totalDue - totalRepaid),
+        outstanding: Math.max(0, totalOwed - totalRepaid),
       };
     });
 
@@ -375,7 +381,7 @@ router.post('/kyc/:id/reject', requireAdmin, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────
-// Approve loan + trigger referral bonus
+// Approve loan + trigger referral bonus + SMS
 // ─────────────────────────────────────────────
 router.post('/loans/:id/approve', requireAdmin, async (req: AdminRequest, res) => {
   try {
@@ -413,12 +419,20 @@ router.post('/loans/:id/approve', requireAdmin, async (req: AdminRequest, res) =
       metadata: { loanId: loan.id },
     });
 
+    // SMS: loan approved
+    await sendLoanApprovedSms(
+      loan.user.phone,
+      loan.amount,
+      loan.totalDue,
+      dueDate
+    );
+
     // Referral bonus
     if (loan.user.referredById && !loan.user.referralBonusPaid) {
       const REFERRER_BONUS = 20000;
       const REFEREE_BONUS = 20000;
 
-      await prisma.user.update({
+      const updatedReferee = await prisma.user.update({
         where: { id: loan.userId },
         data: {
           referralBonusPaid: true,
@@ -426,7 +440,7 @@ router.post('/loans/:id/approve', requireAdmin, async (req: AdminRequest, res) =
         },
       });
 
-      await prisma.user.update({
+      const updatedReferrer = await prisma.user.update({
         where: { id: loan.user.referredById },
         data: { referralCredit: { increment: REFERRER_BONUS } },
       });
@@ -445,6 +459,13 @@ router.post('/loans/:id/approve', requireAdmin, async (req: AdminRequest, res) =
         message: `You earned UGX ${REFERRER_BONUS.toLocaleString()} credit because someone you referred got approved.`,
       });
 
+      // SMS: referrer bonus
+      await sendReferralBonusSms(
+        updatedReferrer.phone,
+        REFERRER_BONUS,
+        updatedReferrer.referralCredit
+      );
+
       console.log(
         `[REFERRAL] Bonus paid: referrer ${loan.user.referredById} +UGX ${REFERRER_BONUS}, referee ${loan.userId} +UGX ${REFEREE_BONUS}`
       );
@@ -458,7 +479,7 @@ router.post('/loans/:id/approve', requireAdmin, async (req: AdminRequest, res) =
 });
 
 // ─────────────────────────────────────────────
-// Reject loan
+// Reject loan + SMS
 // ─────────────────────────────────────────────
 const rejectSchema = z.object({ reason: z.string().max(200).optional() });
 router.post('/loans/:id/reject', requireAdmin, async (req, res) => {
@@ -466,7 +487,10 @@ router.post('/loans/:id/reject', requireAdmin, async (req, res) => {
     const loanId = req.params.id;
     const { reason } = rejectSchema.parse(req.body || {});
 
-    const loan = await prisma.loan.findUnique({ where: { id: loanId } });
+    const loan = await prisma.loan.findUnique({
+      where: { id: loanId },
+      include: { user: true },
+    });
     if (!loan) return res.status(404).json({ error: 'Loan not found' });
 
     if (loan.status !== 'PENDING') {
@@ -495,6 +519,9 @@ router.post('/loans/:id/reject', requireAdmin, async (req, res) => {
       message: rejectionReason,
       metadata: { loanId: loan.id },
     });
+
+    // SMS: loan rejected
+    await sendLoanRejectedSms(loan.user.phone, rejectionReason);
 
     return res.json({ success: true, loan: updated });
   } catch (err: any) {
@@ -562,9 +589,9 @@ router.get('/export/loans.csv', requireAdmin, async (req, res) => {
     return res.status(500).json({ error: 'Server error' });
   }
 });
+
 // ─────────────────────────────────────────────
-// POST /api/admin/run-penalties
-// Trigger penalty calculation manually
+// Run penalties manually
 // ─────────────────────────────────────────────
 router.post('/run-penalties', requireAdmin, async (_req, res) => {
   try {
@@ -576,4 +603,5 @@ router.post('/run-penalties', requireAdmin, async (_req, res) => {
     return res.status(500).json({ error: 'Server error' });
   }
 });
+
 export default router;

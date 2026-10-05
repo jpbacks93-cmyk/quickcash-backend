@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.sendOtpSms = exports.sendSms = void 0;
+exports.sendReferralBonusSms = exports.sendOverdueSms = exports.sendLoanPaidSms = exports.sendRepaymentSms = exports.sendLoanRejectedSms = exports.sendLoanApprovedSms = exports.sendOtpSms = exports.sendSms = void 0;
 // @ts-ignore — africastalking ships without TypeScript types
 const africastalking_1 = __importDefault(require("africastalking"));
 const AT_USERNAME = process.env.AT_USERNAME || '';
@@ -26,6 +26,9 @@ if (AT_USERNAME && AT_API_KEY) {
 else {
     console.log('[SMS] AT credentials missing — SMS will be skipped');
 }
+// ─────────────────────────────────────────────
+// Base send function
+// ─────────────────────────────────────────────
 async function sendSms(phone, message) {
     if (!smsClient) {
         console.log(`[SMS] SKIPPED (no client) → ${phone}: ${message}`);
@@ -51,9 +54,83 @@ async function sendSms(phone, message) {
     }
 }
 exports.sendSms = sendSms;
+// ─────────────────────────────────────────────
+// Helper: format UGX
+// ─────────────────────────────────────────────
+function formatUGX(amount) {
+    return 'UGX ' + Math.round(amount).toLocaleString('en-US');
+}
+// ─────────────────────────────────────────────
+// OTP SMS
+// ─────────────────────────────────────────────
 async function sendOtpSms(phone, code) {
     const message = `Your Jobacks verification code is ${code}. It expires in 5 minutes. Do not share it.`;
     return sendSms(phone, message);
 }
 exports.sendOtpSms = sendOtpSms;
+// ─────────────────────────────────────────────
+// Loan approved SMS
+// ─────────────────────────────────────────────
+async function sendLoanApprovedSms(phone, amount, totalDue, dueDate) {
+    const dateStr = dueDate.toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+    });
+    const message = `Jobacks: Your loan of ${formatUGX(amount)} has been APPROVED. ` +
+        `Total to repay: ${formatUGX(totalDue)} by ${dateStr}. ` +
+        `Repay in the app.`;
+    return sendSms(phone, message);
+}
+exports.sendLoanApprovedSms = sendLoanApprovedSms;
+// ─────────────────────────────────────────────
+// Loan rejected SMS
+// ─────────────────────────────────────────────
+async function sendLoanRejectedSms(phone, reason) {
+    const message = `Jobacks: Your loan application was NOT approved. ` +
+        `Reason: ${reason.slice(0, 100)}. ` +
+        `You can reapply in 30 days.`;
+    return sendSms(phone, message);
+}
+exports.sendLoanRejectedSms = sendLoanRejectedSms;
+// ─────────────────────────────────────────────
+// Repayment received SMS
+// ─────────────────────────────────────────────
+async function sendRepaymentSms(phone, amountPaid, remaining) {
+    const message = `Jobacks: Payment received: ${formatUGX(amountPaid)}. ` +
+        `Remaining balance: ${formatUGX(remaining)}. ` +
+        `Thank you!`;
+    return sendSms(phone, message);
+}
+exports.sendRepaymentSms = sendRepaymentSms;
+// ─────────────────────────────────────────────
+// Loan fully paid SMS
+// ─────────────────────────────────────────────
+async function sendLoanPaidSms(phone) {
+    const message = `Jobacks: Congratulations! Your loan is FULLY PAID. ` +
+        `Your credit score has improved. Apply for a bigger loan next time!`;
+    return sendSms(phone, message);
+}
+exports.sendLoanPaidSms = sendLoanPaidSms;
+// ─────────────────────────────────────────────
+// Loan overdue SMS
+// ─────────────────────────────────────────────
+async function sendOverdueSms(phone, daysLate, lateFee, totalOwed) {
+    const message = `Jobacks: Your loan is ${daysLate} day${daysLate > 1 ? 's' : ''} OVERDUE. ` +
+        `Late fee: ${formatUGX(lateFee)}. ` +
+        `Total due now: ${formatUGX(totalOwed)}. ` +
+        `Pay in the app to avoid further charges.`;
+    return sendSms(phone, message);
+}
+exports.sendOverdueSms = sendOverdueSms;
+// ─────────────────────────────────────────────
+// Referral bonus SMS
+// ─────────────────────────────────────────────
+async function sendReferralBonusSms(phone, bonus, newBalance) {
+    const message = `Jobacks: You earned ${formatUGX(bonus)} referral bonus! ` +
+        `Your credit balance: ${formatUGX(newBalance)}. ` +
+        `Credit applies to your next loan.`;
+    return sendSms(phone, message);
+}
+exports.sendReferralBonusSms = sendReferralBonusSms;
 //# sourceMappingURL=sms.js.map

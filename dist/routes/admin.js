@@ -6,6 +6,7 @@ const prisma_1 = require("../lib/prisma");
 const jwt_1 = require("../lib/jwt");
 const adminAuth_1 = require("../middleware/adminAuth");
 const notifications_1 = require("../lib/notifications");
+const sms_1 = require("../lib/sms");
 const penalty_1 = require("../lib/penalty");
 const router = (0, express_1.Router)();
 // ─────────────────────────────────────────────
@@ -240,10 +241,11 @@ router.get('/loans', adminAuth_1.requireAdmin, async (req, res) => {
             const totalRepaid = loan.repayments
                 .filter((r) => r.status === 'SUCCESSFUL')
                 .reduce((sum, r) => sum + r.amount, 0);
+            const totalOwed = loan.totalDue + (loan.lateFee || 0);
             return {
                 ...loan,
                 totalRepaid,
-                outstanding: Math.max(0, loan.totalDue - totalRepaid),
+                outstanding: Math.max(0, totalOwed - totalRepaid),
             };
         });
         return res.json({ loans: enriched });
@@ -340,7 +342,7 @@ router.post('/kyc/:id/reject', adminAuth_1.requireAdmin, async (req, res) => {
     }
 });
 // ─────────────────────────────────────────────
-// Approve loan + trigger referral bonus
+// Approve loan + trigger referral bonus + SMS
 // ─────────────────────────────────────────────
 router.post('/loans/:id/approve', adminAuth_1.requireAdmin, async (req, res) => {
     try {
@@ -369,18 +371,20 @@ router.post('/loans/:id/approve', adminAuth_1.requireAdmin, async (req, res) => 
             message: `Your loan of UGX ${loan.amount.toLocaleString()} has been approved. Total due: UGX ${loan.totalDue.toLocaleString()}.`,
             metadata: { loanId: loan.id },
         });
+        // SMS: loan approved
+        await (0, sms_1.sendLoanApprovedSms)(loan.user.phone, loan.amount, loan.totalDue, dueDate);
         // Referral bonus
         if (loan.user.referredById && !loan.user.referralBonusPaid) {
             const REFERRER_BONUS = 20000;
             const REFEREE_BONUS = 20000;
-            await prisma_1.prisma.user.update({
+            const updatedReferee = await prisma_1.prisma.user.update({
                 where: { id: loan.userId },
                 data: {
                     referralBonusPaid: true,
                     referralCredit: { increment: REFEREE_BONUS },
                 },
             });
-            await prisma_1.prisma.user.update({
+            const updatedReferrer = await prisma_1.prisma.user.update({
                 where: { id: loan.user.referredById },
                 data: { referralCredit: { increment: REFERRER_BONUS } },
             });
@@ -396,6 +400,8 @@ router.post('/loans/:id/approve', adminAuth_1.requireAdmin, async (req, res) => 
                 title: 'Referral Bonus Earned! 🎉',
                 message: `You earned UGX ${REFERRER_BONUS.toLocaleString()} credit because someone you referred got approved.`,
             });
+            // SMS: referrer bonus
+            await (0, sms_1.sendReferralBonusSms)(updatedReferrer.phone, REFERRER_BONUS, updatedReferrer.referralCredit);
             console.log(`[REFERRAL] Bonus paid: referrer ${loan.user.referredById} +UGX ${REFERRER_BONUS}, referee ${loan.userId} +UGX ${REFEREE_BONUS}`);
         }
         return res.json({ success: true, loan: updated });
@@ -406,14 +412,17 @@ router.post('/loans/:id/approve', adminAuth_1.requireAdmin, async (req, res) => 
     }
 });
 // ─────────────────────────────────────────────
-// Reject loan
+// Reject loan + SMS
 // ─────────────────────────────────────────────
 const rejectSchema = zod_1.z.object({ reason: zod_1.z.string().max(200).optional() });
 router.post('/loans/:id/reject', adminAuth_1.requireAdmin, async (req, res) => {
     try {
         const loanId = req.params.id;
         const { reason } = rejectSchema.parse(req.body || {});
-        const loan = await prisma_1.prisma.loan.findUnique({ where: { id: loanId } });
+        const loan = await prisma_1.prisma.loan.findUnique({
+            where: { id: loanId },
+            include: { user: true },
+        });
         if (!loan)
             return res.status(404).json({ error: 'Loan not found' });
         if (loan.status !== 'PENDING') {
@@ -438,6 +447,8 @@ router.post('/loans/:id/reject', adminAuth_1.requireAdmin, async (req, res) => {
             message: rejectionReason,
             metadata: { loanId: loan.id },
         });
+        // SMS: loan rejected
+        await (0, sms_1.sendLoanRejectedSms)(loan.user.phone, rejectionReason);
         return res.json({ success: true, loan: updated });
     }
     catch (err) {
@@ -496,8 +507,7 @@ router.get('/export/loans.csv', adminAuth_1.requireAdmin, async (req, res) => {
     }
 });
 // ─────────────────────────────────────────────
-// POST /api/admin/run-penalties
-// Trigger penalty calculation manually
+// Run penalties manually
 // ─────────────────────────────────────────────
 router.post('/run-penalties', adminAuth_1.requireAdmin, async (_req, res) => {
     try {

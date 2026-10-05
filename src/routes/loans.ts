@@ -3,11 +3,12 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { requireAuth, AuthRequest } from '../middleware/auth';
 import { createNotification } from '../lib/notifications';
+import { sendRepaymentSms, sendLoanPaidSms } from '../lib/sms';
 
 const router = Router();
 
 // ─────────────────────────────────────────────
-// Loan tiers — UGX (Ugandan Shillings)
+// Loan tiers — UGX
 // ─────────────────────────────────────────────
 const INTEREST_RATES: Record<number, number> = {
   7: 0.08,
@@ -15,8 +16,8 @@ const INTEREST_RATES: Record<number, number> = {
   30: 0.15,
 };
 
-const MIN_AMOUNT = 50000;      // UGX 50,000
-const MAX_AMOUNT = 1000000;    // UGX 1,000,000
+const MIN_AMOUNT = 50000;
+const MAX_AMOUNT = 1000000;
 
 // ─────────────────────────────────────────────
 // POST /api/loans/apply
@@ -115,7 +116,6 @@ router.post('/apply', requireAuth, async (req: AuthRequest, res) => {
 
 // ─────────────────────────────────────────────
 // GET /api/loans
-// Include late fee in outstanding calculation
 // ─────────────────────────────────────────────
 router.get('/', requireAuth, async (req: AuthRequest, res) => {
   try {
@@ -129,19 +129,10 @@ router.get('/', requireAuth, async (req: AuthRequest, res) => {
       const totalRepaid = loan.repayments
         .filter((r) => r.status === 'SUCCESSFUL')
         .reduce((sum, r) => sum + r.amount, 0);
-
-      // Total owed = base total due + late fee
       const totalOwed = loan.totalDue + (loan.lateFee || 0);
       const outstanding = Math.max(0, totalOwed - totalRepaid);
       const progress = totalOwed > 0 ? totalRepaid / totalOwed : 0;
-
-      return {
-        ...loan,
-        totalRepaid,
-        outstanding,
-        progress,
-        totalOwed,
-      };
+      return { ...loan, totalRepaid, outstanding, progress, totalOwed };
     });
 
     return res.json({ loans: enriched });
@@ -171,12 +162,7 @@ router.get('/:id', requireAuth, async (req: AuthRequest, res) => {
     const outstanding = Math.max(0, totalOwed - totalRepaid);
 
     return res.json({
-      loan: {
-        ...loan,
-        totalRepaid,
-        outstanding,
-        totalOwed,
-      },
+      loan: { ...loan, totalRepaid, outstanding, totalOwed },
     });
   } catch (err) {
     console.error(err);
@@ -186,7 +172,6 @@ router.get('/:id', requireAuth, async (req: AuthRequest, res) => {
 
 // ─────────────────────────────────────────────
 // POST /api/loans/:id/repay
-// Penalty-aware: includes lateFee in outstanding
 // ─────────────────────────────────────────────
 const repaySchema = z.object({
   amount: z.number().positive(),
@@ -200,7 +185,7 @@ router.post('/:id/repay', requireAuth, async (req: AuthRequest, res) => {
 
     const loan = await prisma.loan.findFirst({
       where: { id: req.params.id, userId: req.user!.userId },
-      include: { repayments: true },
+      include: { repayments: true, user: true },
     });
 
     if (!loan) return res.status(404).json({ error: 'Loan not found' });
@@ -214,7 +199,6 @@ router.post('/:id/repay', requireAuth, async (req: AuthRequest, res) => {
       .filter((r) => r.status === 'SUCCESSFUL')
       .reduce((sum, r) => sum + r.amount, 0);
 
-    // Total owed = base + late fee
     const totalOwed = loan.totalDue + (loan.lateFee || 0);
     const outstanding = totalOwed - totalRepaid;
 
@@ -249,14 +233,22 @@ router.post('/:id/repay', requireAuth, async (req: AuthRequest, res) => {
         message: `You've successfully repaid your loan. Your credit score has improved.`,
         metadata: { loanId: loan.id },
       });
+
+      // SMS: fully paid
+      await sendLoanPaidSms(loan.user.phone);
     } else {
+      const remaining = Math.max(0, totalOwed - newTotalRepaid);
+
       await createNotification({
         userId: req.user!.userId,
         type: 'REPAYMENT_SUCCESS',
         title: 'Payment Received',
-        message: `Your payment of UGX ${amount.toLocaleString()} was successful. Remaining: UGX ${Math.max(0, totalOwed - newTotalRepaid).toLocaleString()}.`,
+        message: `Your payment of UGX ${amount.toLocaleString()} was successful. Remaining: UGX ${remaining.toLocaleString()}.`,
         metadata: { loanId: loan.id, amount },
       });
+
+      // SMS: partial payment
+      await sendRepaymentSms(loan.user.phone, amount, remaining);
     }
 
     return res.json({
